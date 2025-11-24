@@ -15,7 +15,8 @@
                 <ul>
                     <li><a href="<?php echo BASE_URL; ?>/pages/index.php">Inicio</a></li>
                     <li><a href="<?php echo BASE_URL; ?>/pages/funcionarios/listar.php">Funcionarios</a></li>
-                    <li><a href="<?php echo BASE_URL; ?>/forms/permisos/index.php">Permisos</a></li>
+                    <li><a href="<?php echo BASE_URL; ?>/forms/permisos/index.php">Permisos Pendientes</a></li>
+                    <li><a href="<?php echo BASE_URL; ?>/services/excel/importar.php">Importar Marcaciones</a></li>
                     <?php
                     // Mostrar opciones según rol
                     if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'administrador'):

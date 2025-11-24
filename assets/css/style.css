@@ -14,7 +14,7 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1300px;
     margin: 0 auto;
     padding: 0 20px;
 }
@@ -23,19 +23,24 @@ body {
 header {
     background-color: #2c3e50;
     color: white;
-    padding: 1rem 0;
+    padding: 3rem 0;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
 header h1 {
-    margin-bottom: .3rem;
+    margin-bottom: 1rem;
+    border-bottom: 7px solid rgba(255, 255, 255, 0.3); /* liena */
+    padding-bottom: .1rem;/* Posicion de la linea */
 }
+
+
 
 nav ul {
     list-style: none;
     display: flex;
     gap: 2rem;
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
+    margin-top: 1.5rem;
 }
 
 nav a {
@@ -45,13 +50,16 @@ nav a {
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.3);
     background-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 3px 5px rgba(0, 0, 0, 0.4);  /* Sombra debajo */
     transition: all 0.3s;
 }
 
 nav a:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.3);
     border-color: rgba(255, 255, 255, 0.5);
     transform: translateY(-1px);
+
+
 }
 
 /* User Menu */
@@ -60,6 +68,7 @@ nav a:hover {
     align-items: center;
     gap: 1rem;
     margin-left: auto;
+    margin-top: 1rem;
 }
 
 .user-info {
