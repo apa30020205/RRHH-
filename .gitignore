@@ -1,0 +1,40 @@
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+.htaccess.local
+*.bak
+*.swp
+*.swo
+*~
+
+# Logs
+logs/*.log
+logs/*.txt
+!logs/.gitkeep
+
+# Uploads (excepto estructura)
+uploads/excel/*
+uploads/documentos/*
+!uploads/excel/.gitkeep
+!uploads/documentos/.gitkeep
+
+# Configuración local
+config/database.local.php
+config/local.php
+
+# Archivos temporales
+*.tmp
+*.temp
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Node modules (si usas npm)
+node_modules/
+
+# Composer (si usas composer)
+vendor/
+

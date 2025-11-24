@@ -1,0 +1,16 @@
+# Protección de archivos sensibles
+<FilesMatch "\.(sql|log|ini|bak)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Configuración PHP
+php_flag display_errors Off
+php_flag log_errors On
+php_value error_log logs/php_errors.log
+
+# UTF-8
+AddDefaultCharset UTF-8
+
+# Página de inicio por defecto
+DirectoryIndex index.php pages/index.php
