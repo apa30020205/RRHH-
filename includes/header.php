@@ -23,6 +23,15 @@
                     ?>
                     <li><a href="<?php echo BASE_URL; ?>/roles_rrhh/pages/usuarios/listar.php">Usuarios</a></li>
                     <?php endif; ?>
+                    <?php if (isset($_SESSION['autenticado']) && $_SESSION['autenticado']): ?>
+                    <li style="margin-left: auto;"><a href="<?php echo BASE_URL; ?>/roles_rrhh/pages/logout.php" class="btn-logout">
+                        <i class="fas fa-sign-out-alt"></i> Salir
+                    </a></li>
+                    <?php else: ?>
+                    <li style="margin-left: auto;"><a href="<?php echo BASE_URL; ?>/roles_rrhh/pages/login.php" class="btn-login">
+                        <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+                    </a></li>
+                    <?php endif; ?>
                 </ul>
                 <div class="user-menu">
                     <?php if (isset($_SESSION['autenticado']) && $_SESSION['autenticado']): ?>
@@ -33,13 +42,6 @@
                                 <?php echo $_SESSION['rol'] === 'administrador' ? 'Admin' : 'Usuario'; ?>
                             </span>
                         </span>
-                        <a href="<?php echo BASE_URL; ?>/roles_rrhh/pages/logout.php" class="btn-logout">
-                            <i class="fas fa-sign-out-alt"></i> Salir
-                        </a>
-                    <?php else: ?>
-                        <a href="<?php echo BASE_URL; ?>/roles_rrhh/pages/login.php" class="btn-login">
-                            <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
-                        </a>
                     <?php endif; ?>
                 </div>
             </nav>

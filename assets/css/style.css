@@ -58,8 +58,26 @@ nav a:hover {
     background-color: rgba(255, 255, 255, 0.3);
     border-color: rgba(255, 255, 255, 0.5);
     transform: translateY(-1px);
+}
 
+/* Asegurar que btn-logout y btn-login mantengan su estilo en nav */
+nav a.btn-logout,
+nav a.btn-login {
+    background-color: #e74c3c !important;  /* Rojo para logout */
+    border: none !important;               /* Sin borde blanco */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;  /* Sombra sutil */
+}
 
+nav a.btn-logout:hover {
+    background-color: #c0392b !important;  /* Rojo más oscuro al hover */
+}
+
+nav a.btn-login {
+    background-color: #27ae60 !important;  /* Verde para login */
+}
+
+nav a.btn-login:hover {
+    background-color: #229954 !important;  /* Verde más oscuro al hover */
 }
 
 /* User Menu */
@@ -83,11 +101,11 @@ nav a:hover {
 .btn-login {
     color: white;
     text-decoration: none;
-    padding: 0.25rem 0.75rem;
+    padding: 0.25rem 1.2rem;
     border-radius: 4px;
     background-color: #e74c3c;
     transition: background-color 0.3s;
-    font-size: 0.9rem;
+    font-size: rem;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
