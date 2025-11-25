@@ -235,6 +235,29 @@ try {
         }
     }
     
+    // Guardar errores (no encontrados) en la base de datos
+    if (count($noEncontrados) > 0) {
+        try {
+            $stmtError = $db->prepare("
+                INSERT INTO errores_importacion_biometrico 
+                (id_excel, nombre_excel, apellido_excel, fila_excel, fecha_importacion, resuelto)
+                VALUES (?, ?, ?, ?, NOW(), 0)
+            ");
+            
+            foreach ($noEncontrados as $error) {
+                $stmtError->execute([
+                    $error['id'],
+                    $error['nombre'] ?: null,
+                    $error['apellido'] ?: null,
+                    $error['fila']
+                ]);
+            }
+        } catch (PDOException $e) {
+            // Si hay error al guardar en la tabla de errores, registrar pero no detener el proceso
+            error_log("Error al guardar errores en BD: " . $e->getMessage());
+        }
+    }
+    
     // Preparar respuesta
     $totalProcesados = count($datosFiltrados);
     $mensaje = "Procesamiento completado. ";

@@ -21,6 +21,7 @@
                     // Mostrar opciones según rol
                     if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'administrador'):
                     ?>
+                    <li><a href="<?php echo BASE_URL; ?>/pages/mantenimiento/index.php">Mantenimiento</a></li>
                     <li><a href="<?php echo BASE_URL; ?>/roles_rrhh/pages/usuarios/listar.php">Usuarios</a></li>
                     <?php endif; ?>
                     <?php if (isset($_SESSION['autenticado']) && $_SESSION['autenticado']): ?>
