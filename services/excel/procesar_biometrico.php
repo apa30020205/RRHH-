@@ -192,9 +192,14 @@ try {
                 // Encontrado: actualizar nombre y apellido
                 $cedulaBD = $mapaCedulas[$idNormalizado];
                 
-                // Sanitizar nombre y apellido
-                $nombreSanitizado = !empty($nombre) ? sanitize($nombre) : null;
-                $apellidoSanitizado = !empty($apellido) ? sanitize($apellido) : null;
+                // Normalizar nombre y apellido: Primera letra mayúscula, resto minúscula
+                // Ejemplo: "JUAN" -> "Juan", "PÉREZ" -> "Pérez"
+                $nombreNormalizado = !empty($nombre) ? mb_convert_case(trim($nombre), MB_CASE_TITLE, 'UTF-8') : null;
+                $apellidoNormalizado = !empty($apellido) ? mb_convert_case(trim($apellido), MB_CASE_TITLE, 'UTF-8') : null;
+                
+                // Sanitizar nombre y apellido normalizados
+                $nombreSanitizado = !empty($nombreNormalizado) ? sanitize($nombreNormalizado) : null;
+                $apellidoSanitizado = !empty($apellidoNormalizado) ? sanitize($apellidoNormalizado) : null;
                 
                 // Actualizar solo nombre y apellido
                 $stmt = $db->prepare("
