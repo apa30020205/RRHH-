@@ -18,13 +18,12 @@ if (!isset($_GET['cedula'])) {
 }
 
 $cedula = sanitize($_GET['cedula']);
-// Normalizar cédula para búsqueda (puede venir con guiones en la URL)
-$cedulaNormalizada = normalizarCedula($cedula);
+// La cédula en la BD tiene guiones, usarla tal cual (NO normalizar)
 
 try {
     $db = Database::getInstance()->getConnection();
     $stmt = $db->prepare("SELECT * FROM funcionarios WHERE cedula = ?");
-    $stmt->execute([$cedulaNormalizada]);
+    $stmt->execute([$cedula]);
     $funcionario = $stmt->fetch();
     
     if (!$funcionario) {

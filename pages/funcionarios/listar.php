@@ -296,11 +296,9 @@ include __DIR__ . '/../../includes/header.php';
                     <td><?php echo htmlspecialchars($func['sede_provincia'] ?? '-'); ?></td>
                     <td><?php echo htmlspecialchars($func['Direccion'] ?? '-'); ?></td>
                     <td style="white-space: nowrap;">
-                        <a href="<?php echo BASE_URL; ?>/pages/funcionarios/ver.php?cedula=<?php echo urlencode($func['cedula']); ?>" 
-                           class="btn btn-primary" style="padding: 4px 8px; font-size: 0.85em; margin: 2px;">Ver</a>
+                        <?php if (Auth::isAdmin()): ?>
                         <a href="<?php echo BASE_URL; ?>/pages/funcionarios/editar.php?cedula=<?php echo urlencode($func['cedula']); ?>" 
                            class="btn btn-success" style="padding: 4px 8px; font-size: 0.85em; margin: 2px;">Editar</a>
-                        <?php if (Auth::isAdmin()): ?>
                         <a href="<?php echo BASE_URL; ?>/pages/funcionarios/eliminar.php?cedula=<?php echo urlencode($func['cedula']); ?>" 
                            class="btn btn-danger" 
                            style="padding: 4px 8px; font-size: 0.85em; margin: 2px;"

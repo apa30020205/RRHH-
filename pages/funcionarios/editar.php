@@ -18,15 +18,14 @@ if (!isset($_GET['cedula'])) {
 }
 
 $cedula = sanitize($_GET['cedula']);
-// Normalizar cédula para búsqueda (puede venir con guiones en la URL)
-$cedulaNormalizada = normalizarCedula($cedula);
+// La cédula en la BD tiene guiones, usarla tal cual (NO normalizar)
 
 try {
     $db = Database::getInstance()->getConnection();
     
-    // Cargar datos actuales
+    // Cargar datos actuales - buscar con la cédula tal como está en la BD (con guiones)
     $stmt = $db->prepare("SELECT * FROM funcionarios WHERE cedula = ?");
-    $stmt->execute([$cedulaNormalizada]);
+    $stmt->execute([$cedula]);
     $funcionario = $stmt->fetch();
     
     if (!$funcionario) {
@@ -59,11 +58,11 @@ try {
             $_POST['fecha_inicio'],
             sanitize($_POST['sede_provincia']),
             sanitize($_POST['Direccion']),
-            $cedulaNormalizada
+            $cedula
         ]);
         
         mostrarMensaje("Funcionario actualizado exitosamente", 'success');
-        redirect(BASE_URL . '/pages/funcionarios/ver.php?cedula=' . urlencode($cedulaNormalizada));
+        redirect(BASE_URL . '/pages/funcionarios/listar.php');
     }
     
 } catch (PDOException $e) {
@@ -81,7 +80,7 @@ include __DIR__ . '/../../includes/header.php';
 
 <div class="page-header">
     <h2>Editar Funcionario</h2>
-    <a href="<?php echo BASE_URL; ?>/pages/funcionarios/ver.php?cedula=<?php echo urlencode($funcionario['cedula']); ?>" class="btn">Volver</a>
+    <a href="<?php echo BASE_URL; ?>/pages/funcionarios/listar.php" class="btn">Volver</a>
 </div>
 
 <form method="POST" action="" data-validate>
@@ -144,7 +143,7 @@ include __DIR__ . '/../../includes/header.php';
     
     <div class="form-actions">
         <button type="submit" class="btn btn-primary">Actualizar</button>
-        <a href="<?php echo BASE_URL; ?>/pages/funcionarios/ver.php?cedula=<?php echo urlencode($funcionario['cedula']); ?>" class="btn">Cancelar</a>
+        <a href="<?php echo BASE_URL; ?>/pages/funcionarios/listar.php" class="btn">Cancelar</a>
     </div>
 </form>
 
