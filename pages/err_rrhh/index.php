@@ -292,7 +292,7 @@ include __DIR__ . '/../../includes/header.php';
                 <?php foreach ($errores as $error): ?>
                     <tr style="border-bottom: 1px solid #dee2e6; <?php echo $error['resuelto'] ? 'background: #f0f0f0;' : ''; ?>">
                         <td style="padding: 0.75rem; border: 1px solid #dee2e6;"><?php echo htmlspecialchars($error['id_error']); ?></td>
-                        <td style="padding: 0.75rem; border: 1px solid #dee2e6; font-weight: bold;"><?php echo htmlspecialchars($error['cedula']); ?></td>
+                        <td style="padding: 0.2rem; border: 1px solid #dee2e6; font-weight: bold; font-size: 13px;"><?php echo htmlspecialchars($error['cedula']); ?></td>                       
                         <td style="padding: 0.75rem; border: 1px solid #dee2e6;"><?php echo htmlspecialchars($error['nombre_y_apellido'] ?: '-'); ?></td>
                         <td style="padding: 0.75rem; border: 1px solid #dee2e6;">
                             <?php 
