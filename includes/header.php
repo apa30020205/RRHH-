@@ -22,6 +22,7 @@
                     if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'administrador'):
                     ?>
                     <li><a href="<?php echo BASE_URL; ?>/pages/err_biometrico/index.php">Err-Biométrico</a></li>
+                    <li><a href="<?php echo BASE_URL; ?>/pages/err_rrhh/index.php">Err-RRHH</a></li>
                     <li><a href="<?php echo BASE_URL; ?>/roles_rrhh/pages/usuarios/listar.php">Usuarios</a></li>
                     <?php endif; ?>
                     <?php if (isset($_SESSION['autenticado']) && $_SESSION['autenticado']): ?>

@@ -203,6 +203,62 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
+<!-- Sección: Importar archivo RRHH para detección de errores -->
+<div class="excel-import-container" style="margin-bottom: 2rem;">
+    <div class="upload-section" style="max-width: 800px; margin: 0 auto;">
+        <h3>
+            <i class="fas fa-exclamation-triangle"></i>
+            Importar Archivo Personal RRHH (Detección de Errores)
+        </h3>
+        <p class="section-description">
+            <strong>Archivo Excel con:</strong> "CEDULA" (columna D), "NOMBRE Y APELLIDO" (columna E)
+        </p>
+        <p style="color: #666; font-size: 0.9em; margin: 0.5rem 0;">
+            <strong>Nota:</strong> Este proceso detecta funcionarios que tienen nombre o apellido vacíos en la base de datos.
+            Solo se guardarán errores para cédulas que existan en la tabla funcionarios y que tengan nombre o apellido vacíos.
+        </p>
+        
+        <div class="drop-zone <?php echo $microservicio_disponible ? '' : 'disabled'; ?>" 
+             id="drop-zone-err-rrhh">
+            <input type="file" name="archivo_err_rrhh" id="archivo_err_rrhh" 
+                   accept=".xls,.xlsx,.csv" class="hidden">
+            <div class="drop-zone-content">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p class="drop-text">
+                    <strong>Arrastra y suelta</strong> el archivo "personal RRHH.xlsx" aquí
+                </p>
+                <p class="drop-or">o</p>
+                <button type="button" onclick="document.getElementById('archivo_err_rrhh').click()" 
+                        class="btn btn-primary"
+                        <?php echo $microservicio_disponible ? '' : 'disabled'; ?>>
+                    <i class="fas fa-folder-open"></i> Seleccionar Archivo
+                </button>
+                <p class="drop-info">
+                    Formatos: .xls, .xlsx, .csv (máx. 50MB)
+                </p>
+            </div>
+            <div class="file-info" id="info-err-rrhh">
+                <i class="fas fa-file-excel"></i>
+                <span id="nombre-err-rrhh"></span>
+            </div>
+        </div>
+        
+        <div id="resultado-err-rrhh" class="resultado-container hidden">
+            <h4>Datos del Archivo:</h4>
+            <div class="resultado-stats" id="stats-err-rrhh"></div>
+            <div class="resultado-data" id="contenido-err-rrhh"></div>
+        </div>
+        
+        <!-- Botón para procesar e importar -->
+        <div class="process-section" id="process-section-err-rrhh" style="display: none; margin-top: 1rem;">
+            <button type="button" id="btn-procesar-err-rrhh" class="btn btn-success btn-large">
+                <i class="fas fa-search"></i> Procesar y Detectar Errores
+            </button>
+            <div id="proceso-resultado-err-rrhh" class="mt-3"></div>
+        </div>
+    </div>
+</div>
+
 <script>
 const MICROSERVICIO_URL = '<?php echo MICROSERVICIO_URL; ?>';
 const BASE_URL = '<?php echo BASE_URL; ?>';
@@ -211,6 +267,7 @@ const microservicioDisponible = <?php echo $microservicio_disponible ? 'true' : 
 // Variables globales para almacenar datos
 let datosRRHH = null; // Para el archivo único RRHH
 let datosBiometrico = null; // Para el archivo biométrico
+let datosErrRRHH = null; // Para el archivo RRHH de detección de errores
 
 // Función para enviar archivo RRHH único al microservicio
 async function enviarArchivoRRHH(archivo) {
@@ -598,6 +655,230 @@ async function procesarArchivoBiometrico() {
     }
 }
 
+// Función para enviar archivo Err-RRHH al microservicio
+async function enviarArchivoErrRRHH(archivo) {
+    if (!microservicioDisponible) {
+        alert('El microservicio no está disponible. Por favor, inicia el microservicio Python.');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', archivo);
+    formData.append('header_row', '0'); // Encabezados en fila 0
+
+    const resultadoDiv = document.getElementById('resultado-err-rrhh');
+    const contenidoDiv = document.getElementById('contenido-err-rrhh');
+    const statsDiv = document.getElementById('stats-err-rrhh');
+    
+    // Mostrar loading
+    resultadoDiv.classList.remove('hidden');
+    resultadoDiv.style.display = 'block';
+    statsDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Procesando archivo...</div>';
+    contenidoDiv.innerHTML = '';
+
+    try {
+        const response = await fetch(MICROSERVICIO_URL, {
+            method: 'POST',
+            body: formData
+        });
+
+        // Verificar que la respuesta sea JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const textResponse = await response.text();
+            statsDiv.innerHTML = '';
+            contenidoDiv.innerHTML = `
+                <div class="alert alert-error">
+                    <strong>Error:</strong> El microservicio no devolvió JSON.<br>
+                    <small>Respuesta: ${textResponse.substring(0, 200)}...</small>
+                </div>
+            `;
+            return;
+        }
+
+        // Verificar status HTTP
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success && data.data) {
+            // Guardar datos
+            datosErrRRHH = data;
+            
+            // Mostrar estadísticas
+            const totalFilas = data.data ? data.data.length : 0;
+            statsDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <strong>✓ Archivo procesado correctamente</strong><br>
+                    <strong>Total de filas:</strong> ${totalFilas}<br>
+                    ${data.columns ? `<strong>Columnas detectadas:</strong> ${data.columns.join(', ')}` : ''}
+                </div>
+            `;
+
+            // Mostrar vista previa de datos (primeras 5 filas)
+            if (data.data && data.data.length > 0) {
+                let preview = '<div style="max-height: 400px; overflow-y: auto; margin-top: 1rem;"><table class="table" style="width: 100%; font-size: 0.9em;"><thead><tr>';
+                
+                // Mostrar columnas
+                if (data.columns && data.columns.length > 0) {
+                    data.columns.forEach(col => {
+                        preview += `<th>${col}</th>`;
+                    });
+                } else if (data.data.length > 0) {
+                    // Obtener columnas de la primera fila
+                    Object.keys(data.data[0]).forEach(col => {
+                        preview += `<th>${col}</th>`;
+                    });
+                }
+                
+                preview += '</tr></thead><tbody>';
+                
+                // Mostrar primeras 5 filas
+                data.data.slice(0, 5).forEach(fila => {
+                    preview += '<tr>';
+                    if (data.columns && data.columns.length > 0) {
+                        data.columns.forEach(col => {
+                            const valor = fila[col] || '';
+                            const strValor = String(valor || '');
+                            preview += `<td>${strValor.substring(0, 50)}${strValor.length > 50 ? '...' : ''}</td>`;
+                        });
+                    } else {
+                        Object.values(fila).forEach(valor => {
+                            const strValor = String(valor || '');
+                            preview += `<td>${strValor.substring(0, 50)}${strValor.length > 50 ? '...' : ''}</td>`;
+                        });
+                    }
+                    preview += '</tr>';
+                });
+                
+                preview += '</tbody></table>';
+                
+                if (data.data.length > 5) {
+                    preview += `<p style="margin-top: 0.5rem; font-size: 0.85em; color: #666;">Mostrando 5 de ${data.data.length} filas</p>`;
+                }
+                
+                preview += '</div>';
+                contenidoDiv.innerHTML = preview;
+            }
+
+            // Mostrar botón de procesar
+            document.getElementById('process-section-err-rrhh').style.display = 'block';
+        } else {
+            statsDiv.innerHTML = '';
+            contenidoDiv.innerHTML = `
+                <div class="alert alert-error">
+                    <strong>Error del microservicio:</strong><br>
+                    ${data.error || 'Error desconocido'}
+                </div>
+            `;
+            datosErrRRHH = null;
+        }
+    } catch (error) {
+        statsDiv.innerHTML = '';
+        contenidoDiv.innerHTML = `
+            <div class="alert alert-error">
+                <strong>Error de conexión:</strong> ${error.message}<br>
+                <small>Verifica que el microservicio esté corriendo en http://localhost:5000</small>
+            </div>
+        `;
+        console.error('Error al enviar archivo:', error);
+        datosErrRRHH = null;
+    }
+}
+
+// Función para procesar archivo Err-RRHH
+async function procesarArchivoErrRRHH() {
+    if (!datosErrRRHH) {
+        alert('Por favor, carga el archivo primero');
+        return;
+    }
+
+    const btnProcesar = document.getElementById('btn-procesar-err-rrhh');
+    const resultadoDiv = document.getElementById('proceso-resultado-err-rrhh');
+    
+    btnProcesar.disabled = true;
+    btnProcesar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+    resultadoDiv.innerHTML = '<div class="loading">Procesando y detectando errores...</div>';
+
+    try {
+        // Enviar datos al servidor para procesar
+        const response = await fetch(BASE_URL + '/services/excel/procesar_err_rrhh.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                excel_data: datosErrRRHH
+            })
+        });
+
+        const resultado = await response.json();
+
+        if (resultado.success) {
+            let html = `
+                <div class="alert alert-success">
+                    <strong>✓ Procesamiento completado:</strong><br>
+                    ${resultado.mensaje || 'Archivo procesado correctamente'}
+                </div>
+            `;
+            
+            // Mostrar estadísticas detalladas
+            if (resultado.estadisticas) {
+                const stats = resultado.estadisticas;
+                html += `
+                    <div class="resultado-stats" style="margin-top: 1rem;">
+                        <div class="stat-item"><strong>Total procesados:</strong> ${stats.total_procesados || 0}</div>
+                        <div class="stat-item"><strong>⚠ Errores encontrados:</strong> ${stats.errores_encontrados || 0}</div>
+                        ${stats.errores_procesamiento > 0 ? `<div class="stat-item"><strong>❌ Errores de procesamiento:</strong> ${stats.errores_procesamiento}</div>` : ''}
+                    </div>
+                `;
+                
+                // Si hay errores encontrados, mostrar enlace a la página de errores
+                if (stats.errores_encontrados > 0) {
+                    html += `
+                        <div style="margin-top: 1rem;">
+                            <a href="${BASE_URL}/pages/err_rrhh/index.php" class="btn btn-primary">
+                                <i class="fas fa-list"></i> Ver Lista de Errores (${stats.errores_encontrados})
+                            </a>
+                        </div>
+                    `;
+                }
+            }
+            
+            // Mostrar errores de procesamiento si hay
+            if (resultado.errores && resultado.errores.length > 0) {
+                html += `
+                    <div style="margin-top: 1rem; padding: 1rem; background: #fff3cd; border-radius: 4px; max-height: 300px; overflow-y: auto;">
+                        <strong>Errores de procesamiento (primeros ${resultado.errores.length}):</strong>
+                        <ul style="margin-top: 0.5rem; margin-left: 1.5rem; font-size: 0.9em;">
+                            ${resultado.errores.map(error => `<li>${error}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            resultadoDiv.innerHTML = html;
+        } else {
+            resultadoDiv.innerHTML = `
+                <div class="alert alert-error">
+                    <strong>Error:</strong> ${resultado.mensaje || resultado.error}
+                </div>
+            `;
+        }
+    } catch (error) {
+        resultadoDiv.innerHTML = `
+            <div class="alert alert-error">
+                <strong>Error de conexión:</strong> ${error.message}
+            </div>
+        `;
+    } finally {
+        btnProcesar.disabled = false;
+        btnProcesar.innerHTML = '<i class="fas fa-search"></i> Procesar y Detectar Errores';
+    }
+}
+
 // Función para procesar archivo único RRHH
 async function procesarArchivoRRHH() {
     if (!datosRRHH) {
@@ -715,6 +996,8 @@ function configurarDragDrop(dropZoneId, fileInputId, tipo, nombreElemento, infoE
                 enviarArchivoRRHH(files[0]);
             } else if (tipo === 'biometrico') {
                 enviarArchivoBiometrico(files[0]);
+            } else if (tipo === 'err-rrhh') {
+                enviarArchivoErrRRHH(files[0]);
             }
         }
     });
@@ -726,6 +1009,8 @@ function configurarDragDrop(dropZoneId, fileInputId, tipo, nombreElemento, infoE
                 enviarArchivoRRHH(e.target.files[0]);
             } else if (tipo === 'biometrico') {
                 enviarArchivoBiometrico(e.target.files[0]);
+            } else if (tipo === 'err-rrhh') {
+                enviarArchivoErrRRHH(e.target.files[0]);
             }
         }
     });
@@ -763,6 +1048,18 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Botón procesar archivo biométrico
     document.getElementById('btn-procesar-biometrico').addEventListener('click', procesarArchivoBiometrico);
+    
+    // Configurar archivo Err-RRHH
+    configurarDragDrop(
+        'drop-zone-err-rrhh',
+        'archivo_err_rrhh',
+        'err-rrhh',
+        document.getElementById('nombre-err-rrhh'),
+        document.getElementById('info-err-rrhh')
+    );
+    
+    // Botón procesar archivo Err-RRHH
+    document.getElementById('btn-procesar-err-rrhh').addEventListener('click', procesarArchivoErrRRHH);
 });
 </script>
 
