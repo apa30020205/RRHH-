@@ -372,11 +372,11 @@ include __DIR__ . '/../../includes/header.php';
         }
         
         /* Anchos específicos para columnas */
-        /* Cédula - aumentar 50% */
+        /* Cédula - aumentar ancho para mejor visualización */
         .table-excel thead th:nth-child(1),
         .table-excel tbody td:nth-child(1) {
-            min-width: 120px;
-            width: 12%;
+            min-width: 150px;
+            width: 15%;
             white-space: nowrap;
         }
         
