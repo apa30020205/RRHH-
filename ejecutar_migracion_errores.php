@@ -203,7 +203,7 @@ $confirmar = isset($_GET['confirmar']) && $_GET['confirmar'] === 'si';
                 echo '</div>';
                 
                 echo '<div style="margin-top: 30px;">';
-                echo '<a href="pages/mantenimiento/index.php" class="btn">📋 Ir a Mantenimiento</a>';
+                echo '<a href="pages/err_biometrico/index.php" class="btn">📋 Ir a Err-Biométrico</a>';
                 echo '<a href="pages/index.php" class="btn">🏠 Volver al Inicio</a>';
                 echo '</div>';
                 

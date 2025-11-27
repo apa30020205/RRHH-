@@ -1,6 +1,6 @@
 <?php
 /**
- * Mantenimiento - Reportes de Errores
+ * Err-Biométrico - Reportes de Errores
  * Sistema RRHH
  */
 
@@ -10,7 +10,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../classes/Database.php';
 require_once __DIR__ . '/../../roles_rrhh/classes/Auth.php';
 
-$pageTitle = 'Mantenimiento - Reportes de Errores - Sistema RRHH';
+$pageTitle = 'Err-Biométrico - Reportes de Errores - Sistema RRHH';
 
 // Solo administradores pueden acceder
 if (!Auth::isAdmin()) {
@@ -54,7 +54,7 @@ function urlOrdenar($campo, $busqueda, $resueltos) {
         $params['dir'] = 'asc';
     }
     
-    return BASE_URL . '/pages/mantenimiento/index.php?' . http_build_query($params);
+    return BASE_URL . '/pages/err_biometrico/index.php?' . http_build_query($params);
 }
 
 // Función para mostrar icono de ordenamiento
@@ -155,7 +155,7 @@ include __DIR__ . '/../../includes/header.php';
 ?>
 
 <div class="page-header">
-    <h2>Mantenimiento - Errores de Importación Biométrica</h2>
+    <h2>Err-Biométrico - Errores de Importación Biométrica</h2>
     <a href="<?php echo BASE_URL; ?>/pages/index.php" class="btn">Volver al Inicio</a>
 </div>
 
@@ -192,7 +192,7 @@ include __DIR__ . '/../../includes/header.php';
         <div>
             <button type="submit" class="btn btn-primary">Buscar</button>
             <?php if (!empty($busqueda) || $mostrarResueltos): ?>
-                <a href="<?php echo BASE_URL; ?>/pages/mantenimiento/index.php" class="btn btn-secondary">Limpiar</a>
+                <a href="<?php echo BASE_URL; ?>/pages/err_biometrico/index.php" class="btn btn-secondary">Limpiar</a>
             <?php endif; ?>
         </div>
     </div>
@@ -312,7 +312,7 @@ function marcarResuelto(idError) {
         return;
     }
     
-    fetch('<?php echo BASE_URL; ?>/pages/mantenimiento/marcar_resuelto.php', {
+    fetch('<?php echo BASE_URL; ?>/pages/err_biometrico/marcar_resuelto.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -341,7 +341,7 @@ function marcarPendiente(idError) {
         return;
     }
     
-    fetch('<?php echo BASE_URL; ?>/pages/mantenimiento/marcar_resuelto.php', {
+    fetch('<?php echo BASE_URL; ?>/pages/err_biometrico/marcar_resuelto.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
