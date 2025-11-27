@@ -155,7 +155,7 @@ include __DIR__ . '/../../includes/header.php';
 ?>
 
 <div class="page-header">
-    <h2>Err-Biométrico - Errores de Importación Biométrica</h2>
+    <h2>Errores de Importación Biométrica</h2>
     <a href="<?php echo BASE_URL; ?>/pages/index.php" class="btn">Volver al Inicio</a>
 </div>
 
