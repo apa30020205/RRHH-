@@ -296,6 +296,11 @@ include __DIR__ . '/../../includes/header.php';
                     <td><?php echo htmlspecialchars($func['sede_provincia'] ?? '-'); ?></td>
                     <td><?php echo htmlspecialchars($func['Direccion'] ?? '-'); ?></td>
                     <td style="white-space: nowrap;">
+                        <a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php?cedula=<?php echo urlencode($func['cedula']); ?>" 
+                           class="btn btn-info" 
+                           style="padding: 4px 8px; font-size: 0.85em; margin: 2px;">
+                            <i class="fas fa-clock"></i> Ver Marcaciones
+                        </a>
                         <?php if (Auth::isAdmin()): ?>
                         <a href="<?php echo BASE_URL; ?>/pages/funcionarios/editar.php?cedula=<?php echo urlencode($func['cedula']); ?>" 
                            class="btn btn-success" style="padding: 4px 8px; font-size: 0.85em; margin: 2px;">Editar</a>

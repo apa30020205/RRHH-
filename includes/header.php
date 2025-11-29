@@ -15,6 +15,7 @@
                 <ul>
                     <li><a href="<?php echo BASE_URL; ?>/pages/index.php">Inicio</a></li>
                     <li><a href="<?php echo BASE_URL; ?>/pages/funcionarios/listar.php">Funcionarios</a></li>
+                    <li><a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php">Marcaciones</a></li>
                     <li><a href="<?php echo BASE_URL; ?>/forms/permisos/index.php">Permisos Pendientes</a></li>
                     <li><a href="<?php echo BASE_URL; ?>/services/excel/importar.php">Importar Marcaciones</a></li>
                     <?php
