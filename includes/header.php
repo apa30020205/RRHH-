@@ -15,9 +15,10 @@
                 <ul>
                     <li><a href="<?php echo BASE_URL; ?>/pages/index.php">Inicio</a></li>
                     <li><a href="<?php echo BASE_URL; ?>/pages/funcionarios/listar.php">Funcionarios</a></li>
-                    <li><a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php">Marcaciones</a></li>
                     <li><a href="<?php echo BASE_URL; ?>/forms/permisos/index.php">Permisos Pendientes</a></li>
-                    <li><a href="<?php echo BASE_URL; ?>/services/excel/importar.php">Importar Marcaciones</a></li>
+                    <?php if (isset($_SESSION['autenticado']) && $_SESSION['autenticado']): ?>
+                    <li><a href="<?php echo BASE_URL; ?>/services/excel/importar.php#seccion-marcaciones">Importar Marcaciones</a></li>
+                    <?php endif; ?>
                     <?php
                     // Mostrar opciones según rol
                     if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'administrador'):
@@ -45,6 +46,11 @@
                                 <?php echo $_SESSION['rol'] === 'administrador' ? 'Admin' : 'Usuario'; ?>
                             </span>
                         </span>
+                        <?php if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'administrador'): ?>
+                        <a href="<?php echo BASE_URL; ?>/services/excel/importar.php" class="btn-maintenance">
+                            <i class="fas fa-tools"></i> Mantenimiento
+                        </a>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </nav>

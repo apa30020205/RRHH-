@@ -152,6 +152,27 @@ nav a.btn-login:hover {
     color: white;
 }
 
+/* Botón Mantenimiento */
+.btn-maintenance {
+    padding: 6px 12px;
+    background-color: #6c757d;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.9rem;
+    transition: all 0.3s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.btn-maintenance:hover {
+    background-color: #5a6268;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
 /* Login Page */
 .login-container {
     display: flex;

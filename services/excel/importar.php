@@ -260,7 +260,7 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 
 <!-- Sección: Importar Marcaciones Biométricas -->
-<div class="excel-import-container" style="margin-bottom: 2rem;">
+<div class="excel-import-container" style="margin-bottom: 2rem;" id="seccion-marcaciones">
     <div class="upload-section" style="max-width: 800px; margin: 0 auto;">
         <h3>
             <i class="fas fa-clock"></i>

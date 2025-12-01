@@ -159,7 +159,6 @@ include __DIR__ . '/../../includes/header.php';
     <h2>Lista de Funcionarios</h2>
     <div>
         <a href="<?php echo BASE_URL; ?>/pages/funcionarios/crear.php" class="btn btn-primary">Nuevo Funcionario</a>
-        <a href="<?php echo BASE_URL; ?>/services/excel/importar.php" class="btn btn-success">Importar Excel</a>
     </div>
 </div>
 
