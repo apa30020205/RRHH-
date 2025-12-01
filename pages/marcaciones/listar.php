@@ -336,5 +336,22 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 <?php endif; ?>
 
+<style>
+    /* Reducir interlineado en tabla de marcaciones para que quepan más líneas */
+    .data-table tbody tr {
+        line-height: 1.2;
+    }
+    
+    .data-table tbody td {
+        padding: 0.5rem 0.75rem;
+        line-height: 1.2;
+    }
+    
+    .data-table thead th {
+        padding: 0.5rem 0.75rem;
+        line-height: 1.2;
+    }
+</style>
+
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
 

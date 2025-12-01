@@ -296,17 +296,22 @@ include __DIR__ . '/../../includes/header.php';
                     <td><?php echo htmlspecialchars($func['Direccion'] ?? '-'); ?></td>
                     <td style="white-space: nowrap;">
                         <a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php?cedula=<?php echo urlencode($func['cedula']); ?>" 
-                           class="btn btn-info" 
-                           style="padding: 4px 8px; font-size: 0.85em; margin: 2px;">
-                            <i class="fas fa-clock"></i> Marcacion
+                           class="btn btn-info btn-action-icon" 
+                           title="Ver Marcaciones">
+                            <i class="fas fa-stopwatch"></i>
                         </a>
                         <?php if (Auth::isAdmin()): ?>
                         <a href="<?php echo BASE_URL; ?>/pages/funcionarios/editar.php?cedula=<?php echo urlencode($func['cedula']); ?>" 
-                           class="btn btn-success" style="padding: 4px 8px; font-size: 0.85em; margin: 2px;">Editar</a>
+                           class="btn btn-success btn-action-icon" 
+                           title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </a>
                         <a href="<?php echo BASE_URL; ?>/pages/funcionarios/eliminar.php?cedula=<?php echo urlencode($func['cedula']); ?>" 
-                           class="btn btn-danger" 
-                           style="padding: 4px 8px; font-size: 0.85em; margin: 2px;"
-                           onclick="return confirm('¿Está seguro de eliminar este funcionario?')">Eliminar</a>
+                           class="btn btn-danger btn-action-icon" 
+                           title="Eliminar"
+                           onclick="return confirm('¿Está seguro de eliminar este funcionario?')">
+                            <i class="fas fa-times"></i>
+                        </a>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -329,10 +334,11 @@ include __DIR__ . '/../../includes/header.php';
             text-align: left;
             font-weight: bold;
             border: 1px solid #1a252f;
-            font-size: 0.85em;
+            font-size: 1em;
             position: relative;
         }
-        
+
+       
         .table-excel thead th a {
             color: white;
             text-decoration: none;
@@ -379,23 +385,51 @@ include __DIR__ . '/../../includes/header.php';
         /* Cédula - aumentar ancho para mejor visualización */
         .table-excel thead th:nth-child(1),
         .table-excel tbody td:nth-child(1) {
-            min-width: 150px;
-            width: 15%;
+            min-width: 100px;
+            width: 8%;
             white-space: nowrap;
         }
         
         /* Nombre - aumentar 100% */
         .table-excel thead th:nth-child(2),
         .table-excel tbody td:nth-child(2) {
-            min-width: 150px;
+            min-width: 100px;
             width: 10%;
         }
         
         /* Apellido - aumentar 100% */
         .table-excel thead th:nth-child(3),
         .table-excel tbody td:nth-child(3) {
-            min-width: 150px;
+            min-width: 100px;
             width: 10%;
+        }
+        
+        /* Botones de acción - solo iconos */
+        .btn-action-icon {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            text-decoration: none;
+            margin: 2px;
+            transition: all 0.2s;
+            font-size: 1em;
+        }
+        
+        .btn-action-icon i {
+            margin: 0;
+        }
+        
+        .btn-action-icon:hover {
+            transform: scale(1.1);
+            opacity: 0.9;
+        }
+        
+        .btn-action-icon:active {
+            transform: scale(0.95);
         }
     </style>
 <?php endif; ?>
