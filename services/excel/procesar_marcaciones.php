@@ -298,7 +298,7 @@ try {
                 // Guardar o actualizar marcación
                 $stmtMarcacion->execute([
                     $cedula,
-                    $fechaFormateada,
+                    $fecha,  // Usar $fecha (clave del bucle) que ya está formateada, NO $fechaFormateada del scope anterior
                     $horaEntradaFinal,
                     $horaSalidaFinal
                 ]);
