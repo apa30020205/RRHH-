@@ -161,7 +161,7 @@ try {
         $stmtFunc->execute([$cedulaFiltro]);
         $funcionario = $stmtFunc->fetch();
         if ($funcionario) {
-            $nombreFuncionario = trim(($funcionario['nombre'] ?? '') . ' ' . ($funcionario['apellido'] ?? ''));
+            $nombreFuncionario = trim(($funcionario['nombre'] ?? '') . ' ' . ($funcionario['apellido'] ?? '') . ' - ' . $cedulaFiltro);
         }
     }
     
