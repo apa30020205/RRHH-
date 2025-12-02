@@ -79,11 +79,13 @@ try {
     
     // Preparar statement para insertar/actualizar marcaciones
     $stmtMarcacion = $db->prepare("
-        INSERT INTO marcaciones (cedula, fecha, hora_entrada, hora_salida, fecha_importacion)
-        VALUES (?, ?, ?, ?, NOW())
+        INSERT INTO marcaciones (cedula, fecha, hora_entrada, hora_salida, horas_trabajadas, tiempo_faltante, fecha_importacion)
+        VALUES (?, ?, ?, ?, ?, ?, NOW())
         ON DUPLICATE KEY UPDATE
             hora_entrada = VALUES(hora_entrada),
             hora_salida = VALUES(hora_salida),
+            horas_trabajadas = VALUES(horas_trabajadas),
+            tiempo_faltante = VALUES(tiempo_faltante),
             fecha_importacion = NOW()
     ");
     
@@ -295,12 +297,61 @@ try {
                     $horaSalidaFinal = $marcacion['salidas'][count($marcacion['salidas']) - 1]; // Última (más tardía)
                 }
                 
+                // Calcular horas trabajadas y tiempo faltante
+                $horasTrabajadas = null;
+                $tiempoFaltante = null;
+                
+                if ($horaEntradaFinal && $horaSalidaFinal) {
+                    // Convertir horas a objetos DateTime para cálculo
+                    $entrada = DateTime::createFromFormat('H:i:s', $horaEntradaFinal);
+                    if (!$entrada) {
+                        $entrada = DateTime::createFromFormat('H:i', $horaEntradaFinal);
+                    }
+                    
+                    $salida = DateTime::createFromFormat('H:i:s', $horaSalidaFinal);
+                    if (!$salida) {
+                        $salida = DateTime::createFromFormat('H:i', $horaSalidaFinal);
+                    }
+                    
+                    // Si la salida es después de las 4:00 PM, usar 4:00 PM como límite
+                    $horaLimiteSalida = DateTime::createFromFormat('H:i:s', '16:00:00');
+                    if ($salida > $horaLimiteSalida) {
+                        $salida = clone $horaLimiteSalida;
+                    }
+                    
+                    // Calcular diferencia en minutos
+                    $minutosEntrada = $entrada->format('H') * 60 + $entrada->format('i');
+                    $minutosSalida = $salida->format('H') * 60 + $salida->format('i');
+                    $minutosTrabajados = $minutosSalida - $minutosEntrada;
+                    
+                    // Convertir minutos a horas:minutos
+                    $horas = floor($minutosTrabajados / 60);
+                    $minutos = $minutosTrabajados % 60;
+                    $horasTrabajadas = sprintf('%02d:%02d:00', $horas, $minutos);
+                    
+                    // Calcular tiempo faltante (8 horas = 480 minutos)
+                    $minutosRequeridos = 480; // 8 horas * 60 minutos
+                    
+                    if ($minutosTrabajados < $minutosRequeridos) {
+                        // Calcular diferencia en minutos
+                        $minutosFaltantes = $minutosRequeridos - $minutosTrabajados;
+                        $horasFaltantes = floor($minutosFaltantes / 60);
+                        $minutosFaltantesRestantes = $minutosFaltantes % 60;
+                        $tiempoFaltante = sprintf('%02d:%02d:00', $horasFaltantes, $minutosFaltantesRestantes);
+                    } else {
+                        // Si trabajó 8 horas o más, no hay tiempo faltante
+                        $tiempoFaltante = '00:00:00';
+                    }
+                }
+                
                 // Guardar o actualizar marcación
                 $stmtMarcacion->execute([
                     $cedula,
                     $fecha,  // Usar $fecha (clave del bucle) que ya está formateada, NO $fechaFormateada del scope anterior
                     $horaEntradaFinal,
-                    $horaSalidaFinal
+                    $horaSalidaFinal,
+                    $horasTrabajadas,
+                    $tiempoFaltante
                 ]);
                 
                 // Verificar si fue insert o update

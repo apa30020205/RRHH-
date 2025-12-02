@@ -264,6 +264,12 @@ include __DIR__ . '/../../includes/header.php';
                             Hora Salida <?php echo iconoOrdenamiento('hora_salida'); ?>
                         </a>
                     </th>
+                    <th style="padding: 0.5rem 0.75rem; text-align: left; border: 1px solid #dee2e6;">
+                        Horas Trabajadas
+                    </th>
+                    <th style="padding: 0.5rem 0.75rem; text-align: left; border: 1px solid #dee2e6;">
+                        Tardanza
+                    </th>
                     <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
                         <a href="<?php echo urlOrdenar('fecha_importacion', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta); ?>" 
                            style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
@@ -291,7 +297,15 @@ include __DIR__ . '/../../includes/header.php';
                             }
                             ?>
                         </td>
-                        <td style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center;">
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php 
+                            if ($marcacion['hora_entrada']) {
+                                $hora = new DateTime($marcacion['hora_entrada']);
+                                $horaLimite = new DateTime('08:00:00');
+                                if ($hora > $horaLimite) {
+                                    echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
+                                }
+                            }
+                        ?>">
                             <?php 
                             if ($marcacion['hora_entrada']) {
                                 $hora = new DateTime($marcacion['hora_entrada']);
@@ -301,7 +315,7 @@ include __DIR__ . '/../../includes/header.php';
                             }
                             ?>
                         </td>
-                        <td style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center;">
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center;">
                             <?php 
                             if ($marcacion['hora_salida']) {
                                 $hora = new DateTime($marcacion['hora_salida']);
@@ -311,7 +325,37 @@ include __DIR__ . '/../../includes/header.php';
                             }
                             ?>
                         </td>
-                        <td style="padding: 0.75rem; border: 1px solid #dee2e6;">
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php 
+                            // Fondo rojo solo si hay tiempo faltante (no completó las 8 horas)
+                            if ($marcacion['tiempo_faltante'] && $marcacion['tiempo_faltante'] !== '00:00:00') {
+                                echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
+                            }
+                        ?>">
+                            <?php 
+                            if ($marcacion['horas_trabajadas']) {
+                                $horas = new DateTime($marcacion['horas_trabajadas']);
+                                echo $horas->format('H:i');
+                            } else {
+                                echo '<span style="color: #dc3545;">-</span>';
+                            }
+                            ?>
+                        </td>
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php 
+                            // Fondo rojo siempre que haya tiempo faltante
+                            if ($marcacion['tiempo_faltante'] && $marcacion['tiempo_faltante'] !== '00:00:00') {
+                                echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
+                            }
+                        ?>">
+                            <?php 
+                            if ($marcacion['tiempo_faltante'] && $marcacion['tiempo_faltante'] !== '00:00:00') {
+                                $faltante = new DateTime($marcacion['tiempo_faltante']);
+                                echo $faltante->format('H:i');
+                            } else {
+                                echo '00:00';
+                            }
+                            ?>
+                        </td>
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6;">
                             <?php 
                             if ($marcacion['fecha_importacion']) {
                                 $fecha = new DateTime($marcacion['fecha_importacion']);
@@ -335,23 +379,6 @@ include __DIR__ . '/../../includes/header.php';
         <i class="fas fa-info-circle"></i> No se encontraron marcaciones<?php echo !empty($busqueda) || !empty($fechaDesde) || !empty($fechaHasta) ? ' que coincidan con los filtros' : ''; ?>.
     </div>
 <?php endif; ?>
-
-<style>
-    /* Reducir interlineado en tabla de marcaciones para que quepan más líneas */
-    .data-table tbody tr {
-        line-height: 1.2;
-    }
-    
-    .data-table tbody td {
-        padding: 0.5rem 0.75rem;
-        line-height: 1.2;
-    }
-    
-    .data-table thead th {
-        padding: 0.5rem 0.75rem;
-        line-height: 1.2;
-    }
-</style>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
 
