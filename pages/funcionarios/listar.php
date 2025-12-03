@@ -156,7 +156,17 @@ include __DIR__ . '/../../includes/header.php';
 ?>
 
 <div class="page-header">
-    <h2>Lista de Funcionarios</h2>
+    <h2>
+        Lista de Funcionarios
+        <?php if (isset($totalResultados)): ?>
+            - <?php echo number_format($totalResultados); ?>
+            <?php if (!empty($busqueda) && isset($total)): ?>
+                <span style="font-size: 0.7em; font-weight: normal; color: #666;">
+                    (de <?php echo number_format($total); ?> totales)
+                </span>
+            <?php endif; ?>
+        <?php endif; ?>
+    </h2>
     <div>
         <a href="<?php echo BASE_URL; ?>/pages/funcionarios/crear.php" class="btn btn-primary">Nuevo Funcionario</a>
     </div>
@@ -186,16 +196,6 @@ include __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
     </form>
 </div>
-
-<?php if (isset($total) && $total > 0): ?>
-    <div class="alert alert-<?php echo !empty($busqueda) ? 'info' : 'success'; ?>" style="margin-bottom: 20px;">
-        <?php if (!empty($busqueda)): ?>
-            <strong>Resultados de búsqueda:</strong> <?php echo number_format($totalResultados); ?> de <?php echo number_format($total); ?> funcionarios
-        <?php else: ?>
-            <strong>Total de funcionarios:</strong> <?php echo number_format($total); ?>
-        <?php endif; ?>
-    </div>
-<?php endif; ?>
 
 <?php if (empty($funcionarios)): ?>
     <div class="alert alert-info">

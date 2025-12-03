@@ -154,6 +154,33 @@ try {
     $stmtCount->execute($params);
     $totalRegistros = $stmtCount->fetch()['total'];
     
+    // Calcular sumas totales de horas trabajadas y tardanzas
+    // Usar SUM de segundos para manejar correctamente sumas mayores a 24 horas
+    $sqlSumas = "SELECT 
+                    COALESCE(SUM(TIME_TO_SEC(COALESCE(m.horas_trabajadas, '00:00:00'))), 0) as total_segundos_horas,
+                    COALESCE(SUM(TIME_TO_SEC(COALESCE(m.tiempo_faltante, '00:00:00'))), 0) as total_segundos_tardanzas
+                 FROM marcaciones m
+                 LEFT JOIN funcionarios f ON m.cedula = f.cedula";
+    if (!empty($condiciones)) {
+        $sqlSumas .= " WHERE " . implode(" AND ", $condiciones);
+    }
+    $stmtSumas = $db->prepare($sqlSumas);
+    $stmtSumas->execute($params);
+    $sumas = $stmtSumas->fetch();
+    
+    // Convertir segundos a horas:minutos:segundos
+    $totalSegundosHoras = (int)($sumas['total_segundos_horas'] ?? 0);
+    $totalSegundosTardanzas = (int)($sumas['total_segundos_tardanzas'] ?? 0);
+    
+    // Calcular horas, minutos y segundos
+    $horasHoras = floor($totalSegundosHoras / 3600);
+    $minutosHoras = floor(($totalSegundosHoras % 3600) / 60);
+    $totalHorasTrabajadas = sprintf('%02d:%02d:00', $horasHoras, $minutosHoras);
+    
+    $horasTardanzas = floor($totalSegundosTardanzas / 3600);
+    $minutosTardanzas = floor(($totalSegundosTardanzas % 3600) / 60);
+    $totalTardanzas = sprintf('%02d:%02d:00', $horasTardanzas, $minutosTardanzas);
+    
     // Obtener nombre del funcionario si hay filtro por cédula
     $nombreFuncionario = '';
     if (!empty($cedulaFiltro)) {
@@ -169,6 +196,8 @@ try {
     mostrarMensaje("Error al cargar marcaciones: " . $e->getMessage(), 'error');
     $marcaciones = [];
     $totalRegistros = 0;
+    $totalHorasTrabajadas = '00:00:00';
+    $totalTardanzas = '00:00:00';
     $nombreFuncionario = '';
 }
 
@@ -309,7 +338,11 @@ include __DIR__ . '/../../includes/header.php';
                             <?php 
                             if ($marcacion['hora_entrada']) {
                                 $hora = new DateTime($marcacion['hora_entrada']);
-                                echo $hora->format('H:i');
+                                // Formato 12 horas con a.m./p.m.
+                                $horaFormato = $hora->format('g:i');
+                                $ampm = strtolower($hora->format('A')); // am o pm
+                                $ampm = str_replace(['am', 'pm'], ['a.m.', 'p.m.'], $ampm);
+                                echo $horaFormato . ' ' . $ampm;
                             } else {
                                 echo '<span style="color: #dc3545;">-</span>';
                             }
@@ -319,7 +352,11 @@ include __DIR__ . '/../../includes/header.php';
                             <?php 
                             if ($marcacion['hora_salida']) {
                                 $hora = new DateTime($marcacion['hora_salida']);
-                                echo $hora->format('H:i');
+                                // Formato 12 horas con a.m./p.m.
+                                $horaFormato = $hora->format('g:i');
+                                $ampm = strtolower($hora->format('A')); // am o pm
+                                $ampm = str_replace(['am', 'pm'], ['a.m.', 'p.m.'], $ampm);
+                                echo $horaFormato . ' ' . $ampm;
                             } else {
                                 echo '<span style="color: #dc3545;">-</span>';
                             }
@@ -371,8 +408,46 @@ include __DIR__ . '/../../includes/header.php';
         </table>
     </div>
     
-    <div style="margin-top: 1rem; color: #666;">
-        <p>Total de registros: <strong><?php echo $totalRegistros; ?></strong></p>
+    <div style="margin-top: 1rem; color: #666; display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;">
+        <div>
+            <strong>Total de registros:</strong> <strong><?php echo $totalRegistros; ?></strong>
+        </div>
+        <div>
+            <strong>Total Horas Trabajadas:</strong> 
+            <span style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem;">
+                <?php 
+                // Mostrar el valor formateado (ya viene en formato HH:MM:SS)
+                if (!empty($totalHorasTrabajadas)) {
+                    // Extraer horas y minutos del string
+                    $partes = explode(':', $totalHorasTrabajadas);
+                    $horasInt = (int)($partes[0] ?? 0);
+                    $minutosInt = (int)($partes[1] ?? 0);
+                    // Mostrar en formato HH:MM (puede ser más de 24 horas)
+                    echo sprintf('%d:%02d', $horasInt, $minutosInt);
+                } else {
+                    echo '00:00';
+                }
+                ?>
+            </span>
+        </div>
+        <div>
+            <strong>Total Tardanzas:</strong> 
+            <span style="font-size: 1.1em; font-weight: bold; color: #721c24; margin-left: 0.5rem;">
+                <?php 
+                // Mostrar el valor formateado (ya viene en formato HH:MM:SS)
+                if (!empty($totalTardanzas)) {
+                    // Extraer horas y minutos del string
+                    $partes = explode(':', $totalTardanzas);
+                    $horasInt = (int)($partes[0] ?? 0);
+                    $minutosInt = (int)($partes[1] ?? 0);
+                    // Mostrar en formato HH:MM
+                    echo sprintf('%d:%02d', $horasInt, $minutosInt);
+                } else {
+                    echo '00:00';
+                }
+                ?>
+            </span>
+        </div>
     </div>
 <?php else: ?>
     <div class="alert alert-info" style="padding: 1rem; background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 5px; color: #0c5460;">
