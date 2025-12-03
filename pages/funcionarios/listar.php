@@ -419,6 +419,16 @@ include __DIR__ . '/../../includes/header.php';
             font-size: 1em;
         }
         
+        /* Botón del reloj (Ver Marcaciones) - más grande */
+        .btn-action-icon.btn-info {
+            width: 30px;
+            height: 30px;
+            font-size: 1.4em;
+            background-color: #17a2b8 !important;
+            border-color: #17a2b8 !important;
+            color: white !important;
+        }
+        
         .btn-action-icon i {
             margin: 0;
         }
@@ -428,8 +438,28 @@ include __DIR__ . '/../../includes/header.php';
             opacity: 0.9;
         }
         
+        /* Mantener color azul en hover del botón del reloj */
+        .btn-action-icon.btn-info:hover {
+            background-color: #138496 !important;
+            border-color: #117a8b !important;
+            color: white !important;
+        }
+        
         .btn-action-icon:active {
             transform: scale(0.95);
+        }
+        
+        /* Mantener color azul en el botón del reloj al hacer clic - TODOS los estados */
+        .btn-action-icon.btn-info:active,
+        .btn-action-icon.btn-info:focus,
+        .btn-action-icon.btn-info:focus-visible,
+        .btn-action-icon.btn-info:visited,
+        .btn-action-icon.btn-info:link {
+            background-color: #17a2b8 !important;
+            border-color: #17a2b8 !important;
+            color: white !important;
+            outline: none !important;
+            box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.5) !important;
         }
     </style>
 <?php endif; ?>

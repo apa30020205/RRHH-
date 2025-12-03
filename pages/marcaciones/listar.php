@@ -297,7 +297,7 @@ include __DIR__ . '/../../includes/header.php';
                         Horas Trabajadas
                     </th>
                     <th style="padding: 0.5rem 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        Tardanza
+                        Tardanza/Irregular
                     </th>
                     <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
                         <a href="<?php echo urlOrdenar('fecha_importacion', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta); ?>" 
@@ -431,7 +431,7 @@ include __DIR__ . '/../../includes/header.php';
             </span>
         </div>
         <div>
-            <strong>Total Tardanzas:</strong> 
+            <strong>Total Tardanza/Irregular:</strong> 
             <span style="font-size: 1.1em; font-weight: bold; color: #721c24; margin-left: 0.5rem;">
                 <?php 
                 // Mostrar el valor formateado (ya viene en formato HH:MM:SS)
