@@ -283,6 +283,13 @@ try {
     foreach ($marcacionesAgrupadas as $cedula => $fechas) {
         foreach ($fechas as $fecha => $marcacion) {
             try {
+                // Obtener información del funcionario para verificar si es especial
+                $stmtFuncionario = $db->prepare("SELECT fun_horario_especial FROM funcionarios WHERE cedula = ?");
+                $stmtFuncionario->execute([$cedula]);
+                $funcionario = $stmtFuncionario->fetch();
+                // Tratar NULL como 0 (no especial) - por defecto todos son normales
+                $esEspecial = isset($funcionario['fun_horario_especial']) && intval($funcionario['fun_horario_especial']) === 1;
+                
                 // Primera entrada (más temprana)
                 $horaEntradaFinal = null;
                 if (!empty($marcacion['entradas'])) {
@@ -313,6 +320,12 @@ try {
                         $salida = DateTime::createFromFormat('H:i', $horaSalidaFinal);
                     }
                     
+                    // Si NO es funcionario especial y llega antes de las 8:00, usar 8:00 como hora de entrada
+                    $horaLimiteEntrada = DateTime::createFromFormat('H:i:s', '08:00:00');
+                    if (!$esEspecial && $entrada < $horaLimiteEntrada) {
+                        $entrada = clone $horaLimiteEntrada;
+                    }
+                    
                     // Si la salida es después de las 4:00 PM, usar 4:00 PM como límite
                     $horaLimiteSalida = DateTime::createFromFormat('H:i:s', '16:00:00');
                     if ($salida > $horaLimiteSalida) {
@@ -331,16 +344,30 @@ try {
                     
                     // Calcular tiempo faltante (8 horas = 480 minutos)
                     $minutosRequeridos = 480; // 8 horas * 60 minutos
+                    $tiempoFaltante = '00:00:00';
                     
                     if ($minutosTrabajados < $minutosRequeridos) {
-                        // Calcular diferencia en minutos
-                        $minutosFaltantes = $minutosRequeridos - $minutosTrabajados;
-                        $horasFaltantes = floor($minutosFaltantes / 60);
-                        $minutosFaltantesRestantes = $minutosFaltantes % 60;
-                        $tiempoFaltante = sprintf('%02d:%02d:00', $horasFaltantes, $minutosFaltantesRestantes);
-                    } else {
-                        // Si trabajó 8 horas o más, no hay tiempo faltante
-                        $tiempoFaltante = '00:00:00';
+                        // Si sale antes de las 4:00 PM, la tardanza es desde la hora de salida hasta las 4:00 PM
+                        $salidaOriginal = DateTime::createFromFormat('H:i:s', $horaSalidaFinal);
+                        if (!$salidaOriginal) {
+                            $salidaOriginal = DateTime::createFromFormat('H:i', $horaSalidaFinal);
+                        }
+                        $horaLimiteSalida = DateTime::createFromFormat('H:i:s', '16:00:00');
+                        
+                        if ($salidaOriginal && $salidaOriginal < $horaLimiteSalida) {
+                            // Tardanza = desde hora de salida hasta 4:00 PM
+                            $minutosSalidaOriginal = $salidaOriginal->format('H') * 60 + $salidaOriginal->format('i');
+                            $minutosHasta4PM = (16 * 60) - $minutosSalidaOriginal; // 960 minutos (4 PM) - minutos de salida
+                            $horasFaltantes = floor($minutosHasta4PM / 60);
+                            $minutosFaltantesRestantes = $minutosHasta4PM % 60;
+                            $tiempoFaltante = sprintf('%02d:%02d:00', $horasFaltantes, $minutosFaltantesRestantes);
+                        } else {
+                            // Si sale después de las 4:00 PM, tardanza = 8 horas - horas trabajadas
+                            $minutosFaltantes = $minutosRequeridos - $minutosTrabajados;
+                            $horasFaltantes = floor($minutosFaltantes / 60);
+                            $minutosFaltantesRestantes = $minutosFaltantes % 60;
+                            $tiempoFaltante = sprintf('%02d:%02d:00', $horasFaltantes, $minutosFaltantesRestantes);
+                        }
                     }
                 }
                 
