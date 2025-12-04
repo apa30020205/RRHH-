@@ -64,9 +64,15 @@ $microservicio_disponible = verificarMicroservicio();
 include __DIR__ . '/../../includes/header.php';
 ?>
 
-<div class="page-header">
+<div class="page-header" id="page-header-main">
     <h2>Importar Datos desde Excel</h2>
     <a href="<?php echo BASE_URL; ?>/pages/index.php" class="btn">Volver</a>
+</div>
+
+<div class="page-header" id="page-header-marcaciones" style="display: none;">
+    <h2>Importar Marcaciones Biométricas</h2>
+    <a href="<?php echo BASE_URL; ?>/services/excel/importar.php" class="btn">Ver Todos los Contenedores</a>
+    <a href="<?php echo BASE_URL; ?>/pages/index.php" class="btn">Volver al Inicio</a>
 </div>
 
 <!-- Estado del Microservicio -->
@@ -88,7 +94,7 @@ include __DIR__ . '/../../includes/header.php';
 <?php endif; ?>
 
 <!-- Sección: Importar archivo único RRHH -->
-<div class="excel-import-container" style="margin-bottom: 2rem;">
+<div class="excel-import-container" style="margin-bottom: 2rem;" id="contenedor-rrhh">
     <div class="upload-section" style="max-width: 800px; margin: 0 auto;">
         <h3>
             <i class="fas fa-file-excel"></i>
@@ -147,7 +153,7 @@ include __DIR__ . '/../../includes/header.php';
 <hr style="margin: 2rem 0; border: none; border-top: 2px solid #ddd;">
 
 <!-- Sección: Importar Archivo Biométrico -->
-<div class="excel-import-container" style="margin-bottom: 2rem;">
+<div class="excel-import-container" style="margin-bottom: 2rem;" id="contenedor-biometrico">
     <div class="upload-section" style="max-width: 800px; margin: 0 auto;">
         <h3>
             <i class="fas fa-id-card"></i>
@@ -204,7 +210,7 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 
 <!-- Sección: Importar archivo RRHH para detección de errores -->
-<div class="excel-import-container" style="margin-bottom: 2rem;">
+<div class="excel-import-container" style="margin-bottom: 2rem;" id="contenedor-err-rrhh">
     <div class="upload-section" style="max-width: 800px; margin: 0 auto;">
         <h3>
             <i class="fas fa-exclamation-triangle"></i>
@@ -1394,6 +1400,70 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Botón procesar archivo Marcaciones
     document.getElementById('btn-procesar-marcaciones').addEventListener('click', procesarArchivoMarcaciones);
+    
+    // Detectar si se accedió con el ancla #seccion-marcaciones
+    function mostrarSoloMarcaciones() {
+        var hash = window.location.hash;
+        if (hash === '#seccion-marcaciones') {
+            // Ocultar los otros 3 contenedores
+            var contenedorRRHH = document.getElementById('contenedor-rrhh');
+            var contenedorBiometrico = document.getElementById('contenedor-biometrico');
+            var contenedorErrRRHH = document.getElementById('contenedor-err-rrhh');
+            
+            if (contenedorRRHH) contenedorRRHH.style.display = 'none';
+            if (contenedorBiometrico) contenedorBiometrico.style.display = 'none';
+            if (contenedorErrRRHH) contenedorErrRRHH.style.display = 'none';
+            
+            // Ocultar el header principal y mostrar el de marcaciones
+            var headerMain = document.getElementById('page-header-main');
+            var headerMarcaciones = document.getElementById('page-header-marcaciones');
+            
+            if (headerMain) headerMain.style.display = 'none';
+            if (headerMarcaciones) headerMarcaciones.style.display = 'block';
+            
+            // Ocultar los separadores HR si existen
+            var separadores = document.querySelectorAll('hr');
+            for (var i = 0; i < separadores.length; i++) {
+                separadores[i].style.display = 'none';
+            }
+            
+            // Scroll suave a la sección de marcaciones
+            setTimeout(function() {
+                var seccionMarcaciones = document.getElementById('seccion-marcaciones');
+                if (seccionMarcaciones) {
+                    seccionMarcaciones.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 100);
+        } else {
+            // Mostrar todos los contenedores si no hay hash
+            var contenedorRRHH = document.getElementById('contenedor-rrhh');
+            var contenedorBiometrico = document.getElementById('contenedor-biometrico');
+            var contenedorErrRRHH = document.getElementById('contenedor-err-rrhh');
+            
+            if (contenedorRRHH) contenedorRRHH.style.display = 'block';
+            if (contenedorBiometrico) contenedorBiometrico.style.display = 'block';
+            if (contenedorErrRRHH) contenedorErrRRHH.style.display = 'block';
+            
+            // Mostrar el header principal y ocultar el de marcaciones
+            var headerMain = document.getElementById('page-header-main');
+            var headerMarcaciones = document.getElementById('page-header-marcaciones');
+            
+            if (headerMain) headerMain.style.display = 'block';
+            if (headerMarcaciones) headerMarcaciones.style.display = 'none';
+            
+            // Mostrar los separadores HR
+            var separadores = document.querySelectorAll('hr');
+            for (var i = 0; i < separadores.length; i++) {
+                separadores[i].style.display = 'block';
+            }
+        }
+    }
+    
+    // Ejecutar cuando la página cargue
+    mostrarSoloMarcaciones();
+    
+    // También ejecutar cuando cambie el hash
+    window.addEventListener('hashchange', mostrarSoloMarcaciones);
 });
 </script>
 
