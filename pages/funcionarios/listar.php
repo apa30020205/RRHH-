@@ -319,6 +319,14 @@ include __DIR__ . '/../../includes/header.php';
                            onclick="return confirm('¿Está seguro de eliminar este funcionario?')">
                             <i class="fas fa-times"></i>
                         </a>
+                        <select class="select-fun-extra" 
+                                data-cedula="<?php echo htmlspecialchars($func['cedula']); ?>"
+                                onchange="actualizarFunExtra('<?php echo htmlspecialchars($func['cedula']); ?>', this.value)">
+                            <option value="">---</option>
+                            <option value="Jefe" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'Jefe') ? 'selected' : ''; ?>>Jefe</option>
+                            <option value="Manual" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'Manual') ? 'selected' : ''; ?>>Manual</option>
+                            <option value="otro" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'otro') ? 'selected' : ''; ?>>otro</option>
+                        </select>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -414,28 +422,28 @@ include __DIR__ . '/../../includes/header.php';
         /* Edad - reducir ancho */
         .table-excel thead th:nth-child(5),
         .table-excel tbody td:nth-child(5) {
-            min-width: 60px;
-            width: 5%;
+            min-width: 50px;
+            width: 4%;
         }
         
         /* Sangre - reducir ancho */
         .table-excel thead th:nth-child(6),
         .table-excel tbody td:nth-child(6) {
-            min-width: 70px;
-            width: 6%;
+            min-width: 60px;
+            width: 5%;
         }
         
         /* No. Pos. - reducir ancho */
         .table-excel thead th:nth-child(7),
         .table-excel tbody td:nth-child(7) {
-            min-width: 80px;
-            width: 7%;
+            min-width: 70px;
+            width: 5%;
         }
         
-        /* Acciones - aumentar ancho para nuevo icono */
+        /* Acciones - aumentar ancho para dropdown */
         .table-excel thead th:last-child,
         .table-excel tbody td:last-child {
-            min-width: 180px;
+            min-width: 220px;
             width: 15%;
         }
         
@@ -552,6 +560,29 @@ include __DIR__ . '/../../includes/header.php';
             box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
             transform: scale(1.05); /* Mantener scale en hover */
         }
+        
+        /* Estilos para dropdown fun_extra */
+        .select-fun-extra {
+            height: 32px;
+            padding: 4px 6px;
+            font-size: 0.85em;
+            border-radius: 4px;
+            width: 90px;
+            border: 1px solid #ccc;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .select-fun-extra:hover {
+            border-color: #999;
+        }
+        
+        .select-fun-extra:focus {
+            outline: none;
+            border-color: #17a2b8;
+            box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
+        }
     </style>
     
     <script>
@@ -604,9 +635,91 @@ include __DIR__ . '/../../includes/header.php';
                     this.disabled = false;
                     this.style.opacity = '1';
                 });
+                });
             });
         });
-    });
+        
+        // Función para actualizar fun_extra
+        function actualizarFunExtra(cedula, valor) {
+            try {
+                // Si el valor está vacío, enviar null para borrar
+                const valorEnviar = (valor === '' || valor === null) ? null : valor;
+                
+                // Validar que el valor no exceda 10 caracteres
+                if (valorEnviar && valorEnviar.length > 10) {
+                    alert('Error: El valor no puede exceder 10 caracteres');
+                    return;
+                }
+                
+                // Obtener el select para deshabilitarlo durante la petición
+                const select = document.querySelector('.select-fun-extra[data-cedula="' + cedula + '"]');
+                if (select) {
+                    select.disabled = true;
+                    select.style.opacity = '0.6';
+                }
+                
+                // Hacer petición AJAX
+                fetch('<?php echo BASE_URL; ?>/pages/funcionarios/actualizar_fun_extra.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        cedula: cedula,
+                        fun_extra: valorEnviar
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Error de red: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Actualización exitosa - no mostrar mensaje
+                        console.log('fun_extra actualizado correctamente');
+                    } else {
+                        // Mostrar error
+                        alert('Error: ' + (data.message || 'No se pudo actualizar el campo'));
+                        // Revertir el valor del select
+                        if (select) {
+                            const valorAnterior = select.getAttribute('data-valor-anterior') || '';
+                            select.value = valorAnterior;
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error al comunicarse con el servidor: ' + error.message);
+                    // Revertir el valor del select
+                    if (select) {
+                        const valorAnterior = select.getAttribute('data-valor-anterior') || '';
+                        select.value = valorAnterior;
+                    }
+                })
+                .finally(() => {
+                    // Rehabilitar select
+                    if (select) {
+                        select.disabled = false;
+                        select.style.opacity = '1';
+                        // Guardar el nuevo valor como valor anterior
+                        select.setAttribute('data-valor-anterior', select.value);
+                    }
+                });
+            } catch (error) {
+                console.error('Error en actualizarFunExtra:', error);
+                alert('Error de codificación: ' + error.message);
+            }
+        }
+        
+        // Guardar valores iniciales de los selects al cargar la página
+        document.addEventListener('DOMContentLoaded', function() {
+            const selects = document.querySelectorAll('.select-fun-extra');
+            selects.forEach(function(select) {
+                select.setAttribute('data-valor-anterior', select.value);
+            });
+        });
     </script>
 <?php endif; ?>
 
