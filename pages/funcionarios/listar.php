@@ -294,7 +294,7 @@ include __DIR__ . '/../../includes/header.php';
                     <td><?php echo $func['fecha_inicio'] ? formatearFecha($func['fecha_inicio'], 'd/m/Y') : '-'; ?></td>
                     <td><?php echo htmlspecialchars($func['sede_provincia'] ?? '-'); ?></td>
                     <td><?php echo htmlspecialchars($func['Direccion'] ?? '-'); ?></td>
-                    <td style="white-space: nowrap;">
+                    <td style="white-space: nowrap; display: flex; align-items: center; gap: 4px;">
                         <a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php?cedula=<?php echo urlencode($func['cedula']); ?>" 
                            class="btn btn-info btn-action-icon" 
                            title="Ver Marcaciones">
@@ -439,6 +439,14 @@ include __DIR__ . '/../../includes/header.php';
             width: 15%;
         }
         
+        /* Contenedor de botones de acción - alinear verticalmente */
+        .table-excel tbody td:last-child {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-wrap: nowrap;
+        }
+        
         /* Botones de acción - solo iconos */
         .btn-action-icon {
             width: 32px;
@@ -449,16 +457,18 @@ include __DIR__ . '/../../includes/header.php';
             justify-content: center;
             border-radius: 4px;
             text-decoration: none;
-            margin: 2px;
+            margin: 0;
             transition: all 0.2s;
             font-size: 1em;
+            flex-shrink: 0;
+            vertical-align: middle;
         }
         
-        /* Botón del reloj (Ver Marcaciones) - más grande */
+        /* Botón del reloj (Ver Marcaciones) - ajustado */
         .btn-action-icon.btn-info {
-            width: 30px;
-            height: 30px;
-            font-size: 1.4em;
+            width: 32px;
+            height: 32px;
+            font-size: 1.1em;
             background-color: #17a2b8 !important;
             border-color: #17a2b8 !important;
             color: white !important;
@@ -512,9 +522,11 @@ include __DIR__ . '/../../includes/header.php';
             font-weight: bold;
             font-size: 1em;
             cursor: pointer;
-            margin: 2px;
+            margin: 0;
             transition: all 0.2s;
             font-family: Arial, sans-serif;
+            flex-shrink: 0;
+            vertical-align: middle;
         }
         
         .btn-especial-icon:hover {
@@ -530,7 +542,7 @@ include __DIR__ . '/../../includes/header.php';
             border-color: #1e7e34;
             color: white;
             box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
-            transform: translateY(1px);
+            transform: none; /* Remover translateY para mantener alineación */
         }
         
         .btn-especial-icon.marcado:hover {
@@ -538,6 +550,7 @@ include __DIR__ . '/../../includes/header.php';
             border-color: #1c7430;
             color: white;
             box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+            transform: scale(1.05); /* Mantener scale en hover */
         }
     </style>
     
