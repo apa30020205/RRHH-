@@ -77,21 +77,118 @@ try {
         exit();
     }
     
-    // Actualizar el campo fun_extra
-    $stmt = $db->prepare("UPDATE funcionarios SET fun_extra = ? WHERE cedula = ?");
-    $stmt->execute([$fun_extra, $cedula]);
-    
-    if ($stmt->rowCount() > 0) {
-        echo json_encode([
-            'success' => true,
-            'message' => 'Campo actualizado correctamente'
-        ]);
+    // Si se está marcando como "cesante", mover a ex_funcionarios y ex_marcaciones
+    if ($fun_extra === 'cesante') {
+        // Iniciar transacción
+        $db->beginTransaction();
+        
+        try {
+            // 1. Obtener todos los datos del funcionario
+            $stmtFuncionario = $db->prepare("SELECT * FROM funcionarios WHERE cedula = ?");
+            $stmtFuncionario->execute([$cedula]);
+            $datosFuncionario = $stmtFuncionario->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$datosFuncionario) {
+                throw new Exception("No se pudieron obtener los datos del funcionario");
+            }
+            
+            // 2. Verificar que no esté ya en ex_funcionarios
+            $stmtCheckEx = $db->prepare("SELECT cedula FROM ex_funcionarios WHERE cedula = ?");
+            $stmtCheckEx->execute([$cedula]);
+            if ($stmtCheckEx->fetch()) {
+                throw new Exception("Este funcionario ya está en la lista de ex-funcionarios");
+            }
+            
+            // 3. Insertar en ex_funcionarios (copiar todos los campos)
+            $stmtInsertEx = $db->prepare("
+                INSERT INTO ex_funcionarios (
+                    cedula, nombre, apellido, fecha_nacimiento, edad, sangre, 
+                    no_posicion, posicion_funcional, fecha_inicio, sede_provincia, 
+                    Direccion, fun_horario_especial, fun_extra
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmtInsertEx->execute([
+                $datosFuncionario['cedula'],
+                $datosFuncionario['nombre'],
+                $datosFuncionario['apellido'],
+                $datosFuncionario['fecha_nacimiento'],
+                $datosFuncionario['edad'],
+                $datosFuncionario['sangre'],
+                $datosFuncionario['no_posicion'],
+                $datosFuncionario['posicion_funcional'],
+                $datosFuncionario['fecha_inicio'],
+                $datosFuncionario['sede_provincia'],
+                $datosFuncionario['Direccion'],
+                $datosFuncionario['fun_horario_especial'] ?? 0,
+                'cesante' // Marcar como cesante en ex_funcionarios
+            ]);
+            
+            // 4. Obtener todas las marcaciones del funcionario
+            $stmtMarcaciones = $db->prepare("SELECT * FROM marcaciones WHERE cedula = ?");
+            $stmtMarcaciones->execute([$cedula]);
+            $marcaciones = $stmtMarcaciones->fetchAll(PDO::FETCH_ASSOC);
+            
+            // 5. Insertar marcaciones en ex_marcaciones
+            if (count($marcaciones) > 0) {
+                $stmtInsertMarcaciones = $db->prepare("
+                    INSERT INTO ex_marcaciones (
+                        cedula, fecha, hora_entrada, hora_salida, 
+                        horas_trabajadas, tiempo_faltante, fecha_importacion
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ");
+                
+                foreach ($marcaciones as $marcacion) {
+                    $stmtInsertMarcaciones->execute([
+                        $marcacion['cedula'],
+                        $marcacion['fecha'],
+                        $marcacion['hora_entrada'],
+                        $marcacion['hora_salida'],
+                        $marcacion['horas_trabajadas'],
+                        $marcacion['tiempo_faltante'],
+                        $marcacion['fecha_importacion']
+                    ]);
+                }
+            }
+            
+            // 6. Eliminar marcaciones de marcaciones
+            $stmtDeleteMarcaciones = $db->prepare("DELETE FROM marcaciones WHERE cedula = ?");
+            $stmtDeleteMarcaciones->execute([$cedula]);
+            
+            // 7. Eliminar funcionario de funcionarios
+            $stmtDeleteFuncionario = $db->prepare("DELETE FROM funcionarios WHERE cedula = ?");
+            $stmtDeleteFuncionario->execute([$cedula]);
+            
+            // Confirmar transacción
+            $db->commit();
+            
+            echo json_encode([
+                'success' => true,
+                'message' => 'Funcionario movido a ex-funcionarios correctamente. Se movieron ' . count($marcaciones) . ' marcaciones.',
+                'marcaciones_movidas' => count($marcaciones)
+            ]);
+            
+        } catch (Exception $e) {
+            // Rollback en caso de error
+            $db->rollBack();
+            throw $e;
+        }
     } else {
-        // Si no se actualizó ninguna fila, puede ser que el valor sea el mismo
-        echo json_encode([
-            'success' => true,
-            'message' => 'Campo actualizado correctamente (sin cambios)'
-        ]);
+        // Actualizar el campo fun_extra normalmente (no es cesante)
+        $stmt = $db->prepare("UPDATE funcionarios SET fun_extra = ? WHERE cedula = ?");
+        $stmt->execute([$fun_extra, $cedula]);
+        
+        if ($stmt->rowCount() > 0) {
+            echo json_encode([
+                'success' => true,
+                'message' => 'Campo actualizado correctamente'
+            ]);
+        } else {
+            // Si no se actualizó ninguna fila, puede ser que el valor sea el mismo
+            echo json_encode([
+                'success' => true,
+                'message' => 'Campo actualizado correctamente (sin cambios)'
+            ]);
+        }
     }
     
 } catch (PDOException $e) {

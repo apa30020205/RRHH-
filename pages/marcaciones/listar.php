@@ -19,6 +19,7 @@ $fechaDesde = isset($_GET['fecha_desde']) ? trim($_GET['fecha_desde']) : '';
 $fechaHasta = isset($_GET['fecha_hasta']) ? trim($_GET['fecha_hasta']) : '';
 $ordenarPor = isset($_GET['ordenar']) ? $_GET['ordenar'] : 'fecha';
 $direccion = isset($_GET['dir']) && $_GET['dir'] === 'desc' ? 'DESC' : 'ASC';
+$exFuncionario = isset($_GET['ex_funcionario']) && intval($_GET['ex_funcionario']) === 1;
 
 // Validar campo de ordenamiento (prevenir SQL injection)
 $camposPermitidos = [
@@ -31,7 +32,7 @@ if (!in_array($ordenarPor, $camposPermitidos)) {
 }
 
 // Función para generar URL de ordenamiento
-function urlOrdenar($campo, $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta) {
+function urlOrdenar($campo, $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario = false) {
     $params = ['ordenar' => $campo];
     if (!empty($busqueda)) {
         $params['buscar'] = $busqueda;
@@ -44,6 +45,9 @@ function urlOrdenar($campo, $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta) 
     }
     if (!empty($fechaHasta)) {
         $params['fecha_hasta'] = $fechaHasta;
+    }
+    if ($exFuncionario) {
+        $params['ex_funcionario'] = '1';
     }
     
     // Determinar dirección del ordenamiento
@@ -75,10 +79,14 @@ function iconoOrdenamiento($campo) {
 try {
     $db = Database::getInstance()->getConnection();
     
-    // Construir consulta con JOIN a funcionarios para obtener nombre y apellido
+    // Determinar qué tablas usar según si es ex-funcionario o no
+    $tablaMarcaciones = $exFuncionario ? 'ex_marcaciones' : 'marcaciones';
+    $tablaFuncionarios = $exFuncionario ? 'ex_funcionarios' : 'funcionarios';
+    
+    // Construir consulta con JOIN a funcionarios/ex_funcionarios para obtener nombre y apellido
     $sql = "SELECT m.*, f.nombre, f.apellido 
-            FROM marcaciones m
-            LEFT JOIN funcionarios f ON m.cedula = f.cedula";
+            FROM $tablaMarcaciones m
+            LEFT JOIN $tablaFuncionarios f ON m.cedula = f.cedula";
     $params = [];
     $condiciones = [];
     
@@ -145,8 +153,8 @@ try {
     
     // Contar total (con búsqueda y filtros si aplica)
     $sqlCount = "SELECT COUNT(*) as total 
-                 FROM marcaciones m
-                 LEFT JOIN funcionarios f ON m.cedula = f.cedula";
+                 FROM $tablaMarcaciones m
+                 LEFT JOIN $tablaFuncionarios f ON m.cedula = f.cedula";
     if (!empty($condiciones)) {
         $sqlCount .= " WHERE " . implode(" AND ", $condiciones);
     }
@@ -159,8 +167,8 @@ try {
     $sqlSumas = "SELECT 
                     COALESCE(SUM(TIME_TO_SEC(COALESCE(m.horas_trabajadas, '00:00:00'))), 0) as total_segundos_horas,
                     COALESCE(SUM(TIME_TO_SEC(COALESCE(m.tiempo_faltante, '00:00:00'))), 0) as total_segundos_tardanzas
-                 FROM marcaciones m
-                 LEFT JOIN funcionarios f ON m.cedula = f.cedula";
+                 FROM $tablaMarcaciones m
+                 LEFT JOIN $tablaFuncionarios f ON m.cedula = f.cedula";
     if (!empty($condiciones)) {
         $sqlSumas .= " WHERE " . implode(" AND ", $condiciones);
     }
@@ -184,11 +192,12 @@ try {
     // Obtener nombre del funcionario si hay filtro por cédula
     $nombreFuncionario = '';
     if (!empty($cedulaFiltro)) {
-        $stmtFunc = $db->prepare("SELECT nombre, apellido FROM funcionarios WHERE cedula = ?");
+        $stmtFunc = $db->prepare("SELECT nombre, apellido FROM $tablaFuncionarios WHERE cedula = ?");
         $stmtFunc->execute([$cedulaFiltro]);
         $funcionario = $stmtFunc->fetch();
         if ($funcionario) {
-            $nombreFuncionario = trim(($funcionario['nombre'] ?? '') . ' ' . ($funcionario['apellido'] ?? '') . ' - ' . $cedulaFiltro);
+            $prefijo = $exFuncionario ? ' (Ex-Funcionario)' : '';
+            $nombreFuncionario = trim(($funcionario['nombre'] ?? '') . ' ' . ($funcionario['apellido'] ?? '') . ' - ' . $cedulaFiltro . $prefijo);
         }
     }
     
@@ -208,7 +217,7 @@ include __DIR__ . '/../../includes/header.php';
     <h2>Marcaciones Biométricas<?php echo !empty($nombreFuncionario) ? ' - ' . htmlspecialchars($nombreFuncionario) : ''; ?></h2>
     <a href="<?php echo BASE_URL; ?>/pages/index.php" class="btn">Volver al Inicio</a>
     <?php if (!empty($cedulaFiltro)): ?>
-        <a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php" class="btn btn-secondary">Ver Todas las Marcaciones</a>
+        <a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php<?php echo $exFuncionario ? '?ex_funcionario=1' : ''; ?>" class="btn btn-secondary">Ver Todas las Marcaciones</a>
     <?php endif; ?>
 </div>
 
@@ -224,6 +233,9 @@ include __DIR__ . '/../../includes/header.php';
         <?php else: ?>
         <input type="hidden" name="cedula" value="<?php echo htmlspecialchars($cedulaFiltro); ?>">
         <?php endif; ?>
+        <?php if ($exFuncionario): ?>
+        <input type="hidden" name="ex_funcionario" value="1">
+        <?php endif; ?>
         <div style="min-width: 150px;">
             <label style="display: block; font-size: 0.9em; margin-bottom: 0.25rem; color: #666;">Desde:</label>
             <input type="date" name="fecha_desde" value="<?php echo htmlspecialchars($fechaDesde); ?>" 
@@ -237,7 +249,12 @@ include __DIR__ . '/../../includes/header.php';
         <div>
             <button type="submit" class="btn btn-primary">Buscar</button>
             <?php if (!empty($busqueda) || !empty($fechaDesde) || !empty($fechaHasta)): ?>
-                <a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php<?php echo !empty($cedulaFiltro) ? '?cedula=' . urlencode($cedulaFiltro) : ''; ?>" class="btn btn-secondary">Limpiar</a>
+                <a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php<?php 
+                    $params = [];
+                    if (!empty($cedulaFiltro)) $params['cedula'] = $cedulaFiltro;
+                    if ($exFuncionario) $params['ex_funcionario'] = '1';
+                    echo !empty($params) ? '?' . http_build_query($params) : '';
+                ?>" class="btn btn-secondary">Limpiar</a>
             <?php endif; ?>
         </div>
     </div>
@@ -250,45 +267,45 @@ include __DIR__ . '/../../includes/header.php';
             <thead>
                 <tr style="background: #343a40; color: white;">
                     <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        <a href="<?php echo urlOrdenar('id_marcacion', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta); ?>" 
+                        <a href="<?php echo urlOrdenar('id_marcacion', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
                            style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
                             ID <?php echo iconoOrdenamiento('id_marcacion'); ?>
                         </a>
                     </th>
                     <?php if (empty($cedulaFiltro)): ?>
                     <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        <a href="<?php echo urlOrdenar('cedula', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta); ?>" 
+                        <a href="<?php echo urlOrdenar('cedula', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
                            style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
                             Cédula <?php echo iconoOrdenamiento('cedula'); ?>
                         </a>
                     </th>
                     <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        <a href="<?php echo urlOrdenar('nombre', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta); ?>" 
+                        <a href="<?php echo urlOrdenar('nombre', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
                            style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
                             Nombre <?php echo iconoOrdenamiento('nombre'); ?>
                         </a>
                     </th>
                     <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        <a href="<?php echo urlOrdenar('apellido', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta); ?>" 
+                        <a href="<?php echo urlOrdenar('apellido', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
                            style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
                             Apellido <?php echo iconoOrdenamiento('apellido'); ?>
                         </a>
                     </th>
                     <?php endif; ?>
                     <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        <a href="<?php echo urlOrdenar('fecha', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta); ?>" 
+                        <a href="<?php echo urlOrdenar('fecha', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
                            style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
                             Fecha <?php echo iconoOrdenamiento('fecha'); ?>
                         </a>
                     </th>
                     <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        <a href="<?php echo urlOrdenar('hora_entrada', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta); ?>" 
+                        <a href="<?php echo urlOrdenar('hora_entrada', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
                            style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
                             Hora Entrada <?php echo iconoOrdenamiento('hora_entrada'); ?>
                         </a>
                     </th>
                     <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        <a href="<?php echo urlOrdenar('hora_salida', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta); ?>" 
+                        <a href="<?php echo urlOrdenar('hora_salida', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
                            style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
                             Hora Salida <?php echo iconoOrdenamiento('hora_salida'); ?>
                         </a>
@@ -300,7 +317,7 @@ include __DIR__ . '/../../includes/header.php';
                         Tardanza/Irregular
                     </th>
                     <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        <a href="<?php echo urlOrdenar('fecha_importacion', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta); ?>" 
+                        <a href="<?php echo urlOrdenar('fecha_importacion', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
                            style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
                             Fecha Importación <?php echo iconoOrdenamiento('fecha_importacion'); ?>
                         </a>
