@@ -167,9 +167,6 @@ include __DIR__ . '/../../includes/header.php';
             <?php endif; ?>
         <?php endif; ?>
     </h2>
-    <div>
-        <a href="<?php echo BASE_URL; ?>/pages/funcionarios/crear.php" class="btn btn-primary">Nuevo Funcionario</a>
-    </div>
 </div>
 
 <!-- Barra de búsqueda -->
@@ -325,6 +322,10 @@ include __DIR__ . '/../../includes/header.php';
                             <option value="">---</option>
                             <option value="Jefe" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'Jefe') ? 'selected' : ''; ?>>Jefe</option>
                             <option value="Manual" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'Manual') ? 'selected' : ''; ?>>Manual</option>
+                            <option value="cesante" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'cesante') ? 'selected' : ''; ?>>cesante</option>
+                            <option value="Préstamo" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'Préstamo') ? 'selected' : ''; ?>>Préstamo</option>
+                            <option value="Lic. Sueldo" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'Lic. Sueldo') ? 'selected' : ''; ?>>Lic. Sueldo</option>
+                            <option value="Lic. Sin Sueldo" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'Lic. Sin Sueldo') ? 'selected' : ''; ?>>Lic. Sin Sueldo</option>
                             <option value="otro" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'otro') ? 'selected' : ''; ?>>otro</option>
                         </select>
                         <?php endif; ?>
@@ -645,9 +646,9 @@ include __DIR__ . '/../../includes/header.php';
                 // Si el valor está vacío, enviar null para borrar
                 const valorEnviar = (valor === '' || valor === null) ? null : valor;
                 
-                // Validar que el valor no exceda 10 caracteres
-                if (valorEnviar && valorEnviar.length > 10) {
-                    alert('Error: El valor no puede exceder 10 caracteres');
+                // Validar que el valor no exceda 20 caracteres
+                if (valorEnviar && valorEnviar.length > 20) {
+                    alert('Error: El valor no puede exceder 20 caracteres');
                     return;
                 }
                 

@@ -32,32 +32,33 @@ $input = file_get_contents('php://input');
 $data = json_decode($input, true);
 
 // Validar que se recibieron los datos necesarios
-if (!isset($data['cedula']) || !isset($data['fun_extra'])) {
+// Usar array_key_exists en lugar de isset para permitir valores null
+if (!isset($data['cedula']) || !array_key_exists('fun_extra', $data)) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Datos incompletos: se requiere cedula y fun_extra']);
     exit();
 }
 
 $cedula = sanitize($data['cedula']);
-$fun_extra = $data['fun_extra'];
+$fun_extra = $data['fun_extra'] ?? null; // Usar null si no existe
 
 // Si fun_extra es null o vacío, establecer como NULL para borrar
 if ($fun_extra === null || $fun_extra === '') {
     $fun_extra = null;
 } else {
-    // Validar que el valor no exceda 10 caracteres
+    // Validar que el valor no exceda 20 caracteres
     $fun_extra = sanitize($fun_extra);
-    if (strlen($fun_extra) > 10) {
+    if (strlen($fun_extra) > 20) {
         http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'El valor no puede exceder 10 caracteres']);
+        echo json_encode(['success' => false, 'message' => 'El valor no puede exceder 20 caracteres']);
         exit();
     }
     
     // Validar que el valor sea uno de los permitidos
-    $valoresPermitidos = ['Jefe', 'Manual', 'otro'];
+    $valoresPermitidos = ['Jefe', 'Manual', 'cesante', 'Préstamo', 'Lic. Sueldo', 'Lic. Sin Sueldo', 'otro'];
     if (!in_array($fun_extra, $valoresPermitidos)) {
         http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'Valor no permitido. Solo se permiten: Jefe, Manual, otro']);
+        echo json_encode(['success' => false, 'message' => 'Valor no permitido. Solo se permiten: Jefe, Manual, cesante, Préstamo, Lic. Sueldo, Lic. Sin Sueldo, otro']);
         exit();
     }
 }
