@@ -3,7 +3,7 @@
  * Índice de Formularios de Permisos
  * Sistema RRHH
  * 
- * Aquí se migrarán los 6 formularios de permisos
+ * Listado de 6 tipos de formularios de permisos/vacaciones
  */
 
 require_once __DIR__ . '/../../roles_rrhh/middleware/auth_middleware.php';
@@ -16,29 +16,49 @@ $pageTitle = 'Listado Permisos/Vacaciones - Sistema RRHH';
 include __DIR__ . '/../../includes/header.php';
 ?>
 
-<div class="page-header">
-    <h2>Listado Permisos/Vacaciones</h2>
-</div>
-
 <style>
+    body {
+        background-color: #f5f5f5;
+    }
+    
+    .page-header {
+        margin-bottom: 2rem;
+    }
+    
     .permisos-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        grid-template-columns: repeat(3, 1fr);
         gap: 1.5rem;
         margin: 2rem 0;
+        max-width: 1400px;
+    }
+    
+    @media (max-width: 1024px) {
+        .permisos-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .permisos-grid {
+            grid-template-columns: 1fr;
+        }
     }
     
     .permiso-card {
         background: white;
         border-radius: 8px;
-        padding: 1.5rem;
+        padding: 2rem;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         transition: transform 0.3s ease, box-shadow 0.3s ease;
         cursor: pointer;
         color: #333;
-        text-align: left;
+        text-align: center;
         position: relative;
-        border-left: 5px solid #667eea;
+        border-left: 4px solid;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
     }
     
     .permiso-card:hover {
@@ -46,82 +66,85 @@ include __DIR__ . '/../../includes/header.php';
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
     
-    /* Colores de borde izquierdo para cada card */
+    /* Colores de borde izquierdo y tema para cada card */
     .permiso-card:nth-child(1) {
-        border-left-color: #2196F3; /* Azul */
+        border-left-color: #2196F3; /* Azul - Jornada Extraordinaria */
     }
     
     .permiso-card:nth-child(2) {
-        border-left-color: #f44336; /* Rojo */
+        border-left-color: #f44336; /* Rojo - Misión Oficial */
     }
     
     .permiso-card:nth-child(3) {
-        border-left-color: #9c27b0; /* Morado */
+        border-left-color: #9c27b0; /* Morado - Reincorporación */
     }
     
     .permiso-card:nth-child(4) {
-        border-left-color: #ff9800; /* Naranja */
+        border-left-color: #ff9800; /* Naranja - Tiempo Compensatorio */
     }
     
     .permiso-card:nth-child(5) {
-        border-left-color: #4caf50; /* Verde */
+        border-left-color: #4caf50; /* Verde - Solicitud de Permiso */
     }
     
     .permiso-card:nth-child(6) {
-        border-left-color: #e91e63; /* Rosa */
+        border-left-color: #e91e63; /* Rosa - Solicitud de Vacaciones */
     }
     
     .permiso-card .icon-container {
-        margin-bottom: 1rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
     }
     
-    .permiso-card i {
-        font-size: 2.5rem;
+    .permiso-card i.fa-icon {
+        font-size: 3.5rem;
         margin-bottom: 0;
     }
     
     /* Colores de iconos */
-    .permiso-card:nth-child(1) i {
+    .permiso-card:nth-child(1) i.fa-icon {
         color: #2196F3; /* Azul */
     }
     
-    .permiso-card:nth-child(2) i {
+    .permiso-card:nth-child(2) i.fa-icon {
         color: #f44336; /* Rojo */
     }
     
-    .permiso-card:nth-child(3) i {
+    .permiso-card:nth-child(3) i.fa-icon {
         color: #9c27b0; /* Morado */
     }
     
-    .permiso-card:nth-child(4) i {
+    .permiso-card:nth-child(4) i.fa-icon {
         color: #ff9800; /* Naranja */
     }
     
-    .permiso-card:nth-child(5) i {
+    .permiso-card:nth-child(5) i.fa-icon {
         color: #4caf50; /* Verde */
     }
     
-    .permiso-card:nth-child(6) i {
+    .permiso-card:nth-child(6) i.fa-icon {
         color: #e91e63; /* Rosa */
     }
     
     .permiso-card h3 {
-        margin: 0 0 0.5rem 0;
-        font-size: 1.25rem;
+        margin: 0 0 0.75rem 0;
+        font-size: 1.3rem;
         font-weight: bold;
         color: #333;
     }
     
     .permiso-card p {
         margin: 0 0 1.5rem 0;
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         color: #666;
         line-height: 1.5;
     }
     
     .permiso-card .btn {
         border: none;
-        padding: 0.6rem 1.2rem;
+        padding: 0.75rem 1.5rem;
         border-radius: 6px;
         font-weight: 500;
         text-decoration: none;
@@ -129,7 +152,8 @@ include __DIR__ . '/../../includes/header.php';
         align-items: center;
         gap: 0.5rem;
         transition: all 0.3s ease;
-        font-size: 0.9rem;
+        font-size: 0.95rem;
+        cursor: pointer;
     }
     
     /* Colores de botones */
@@ -252,58 +276,76 @@ include __DIR__ . '/../../includes/header.php';
 </style>
 
 <div class="permisos-grid">
+    <!-- Card 1: Jornada Extraordinaria (Azul) -->
     <div class="permiso-card" onclick="mostrarConstruccion()">
         <div class="icon-container">
-            <i class="fas fa-umbrella-beach"></i>
+            <i class="fas fa-clock fa-icon"></i>
         </div>
-        <h3>Vacaciones</h3>
-        <p>Solicitar días de vacaciones</p>
-        <span class="btn"><i class="fas fa-file-alt"></i> Llenar Formulario</span>
+        <h3>Jornada Extraordinaria</h3>
+        <p>Autorización para laborar en jornada extraordinaria</p>
+        <button class="btn" onclick="event.stopPropagation(); mostrarConstruccion();">
+            <i class="fas fa-edit"></i> Llenar Formulario
+        </button>
     </div>
     
+    <!-- Card 2: Misión Oficial (Rojo) -->
     <div class="permiso-card" onclick="mostrarConstruccion()">
         <div class="icon-container">
-            <i class="fas fa-heartbeat"></i>
+            <i class="fas fa-plane fa-icon"></i>
         </div>
-        <h3>Permiso Médico</h3>
-        <p>Solicitar permiso por razones médicas</p>
-        <span class="btn"><i class="fas fa-file-alt"></i> Llenar Formulario</span>
+        <h3>Misión Oficial</h3>
+        <p>Solicitud de misión oficial</p>
+        <button class="btn" onclick="event.stopPropagation(); mostrarConstruccion();">
+            <i class="fas fa-edit"></i> Llenar Formulario
+        </button>
     </div>
     
+    <!-- Card 3: Reincorporación (Morado) -->
     <div class="permiso-card" onclick="mostrarConstruccion()">
         <div class="icon-container">
-            <i class="fas fa-user-clock"></i>
+            <i class="fas fa-redo fa-icon"></i>
         </div>
-        <h3>Permiso Personal</h3>
-        <p>Solicitar permiso por asuntos personales</p>
-        <span class="btn"><i class="fas fa-file-alt"></i> Llenar Formulario</span>
+        <h3>Reincorporación</h3>
+        <p>Notificación de reincorporación</p>
+        <button class="btn" onclick="event.stopPropagation(); mostrarConstruccion();">
+            <i class="fas fa-edit"></i> Llenar Formulario
+        </button>
     </div>
     
+    <!-- Card 4: Tiempo Compensatorio (Naranja) -->
     <div class="permiso-card" onclick="mostrarConstruccion()">
         <div class="icon-container">
-            <i class="fas fa-baby"></i>
+            <i class="fas fa-hourglass-half fa-icon"></i>
         </div>
-        <h3>Licencia de Maternidad</h3>
-        <p>Solicitar licencia de maternidad</p>
-        <span class="btn"><i class="fas fa-file-alt"></i> Llenar Formulario</span>
+        <h3>Tiempo Compensatorio</h3>
+        <p>Solicitud de uso de tiempo compensatorio</p>
+        <button class="btn" onclick="event.stopPropagation(); mostrarConstruccion();">
+            <i class="fas fa-edit"></i> Llenar Formulario
+        </button>
     </div>
     
+    <!-- Card 5: Solicitud de Permiso (Verde) -->
     <div class="permiso-card" onclick="mostrarConstruccion()">
         <div class="icon-container">
-            <i class="fas fa-child"></i>
+            <i class="fas fa-calendar-check fa-icon"></i>
         </div>
-        <h3>Licencia de Paternidad</h3>
-        <p>Solicitar licencia de paternidad</p>
-        <span class="btn"><i class="fas fa-file-alt"></i> Llenar Formulario</span>
+        <h3>Solicitud de Permiso</h3>
+        <p>Solicitud de permiso personal</p>
+        <button class="btn" onclick="event.stopPropagation(); mostrarConstruccion();">
+            <i class="fas fa-edit"></i> Llenar Formulario
+        </button>
     </div>
     
+    <!-- Card 6: Solicitud de Vacaciones (Rosa) -->
     <div class="permiso-card" onclick="mostrarConstruccion()">
         <div class="icon-container">
-            <i class="fas fa-calendar-check"></i>
+            <i class="fas fa-umbrella-beach fa-icon"></i>
         </div>
-        <h3>Día Compensatorio</h3>
-        <p>Solicitar día compensatorio</p>
-        <span class="btn"><i class="fas fa-file-alt"></i> Llenar Formulario</span>
+        <h3>Solicitud de Vacaciones</h3>
+        <p>Solicitud de vacaciones</p>
+        <button class="btn" onclick="event.stopPropagation(); mostrarConstruccion();">
+            <i class="fas fa-edit"></i> Llenar Formulario
+        </button>
     </div>
 </div>
 
@@ -337,9 +379,4 @@ document.addEventListener('keydown', function(event) {
 });
 </script>
 
-<div class="info-box" style="margin-top: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
-    <p><strong>Nota:</strong> Los formularios se migrarán desde el sistema anterior. Revisar y adaptar según sea necesario.</p>
-</div>
-
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
-
