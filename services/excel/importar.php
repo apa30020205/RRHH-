@@ -61,7 +61,10 @@ $microservicio_disponible = verificarMicroservicio();
 // Debug: Si quieres ver el estado en desarrollo, descomenta esto:
 // error_log("Microservicio disponible: " . ($microservicio_disponible ? 'SÍ' : 'NO'));
 
-include __DIR__ . '/../../includes/header.php';
+// Si se está incluyendo desde mantenimiento, no mostrar header
+if (!isset($_SOLO_CONTENEDORES) || !$_SOLO_CONTENEDORES) {
+    include __DIR__ . '/../../includes/header.php';
+}
 ?>
 
 <div class="page-header" id="page-header-main">
@@ -75,6 +78,7 @@ include __DIR__ . '/../../includes/header.php';
     <a href="<?php echo BASE_URL; ?>/pages/index.php" class="btn">Volver al Inicio</a>
 </div>
 
+<?php if (!isset($_SOLO_CONTENEDORES) || !$_SOLO_CONTENEDORES): ?>
 <!-- Estado del Microservicio -->
 <?php if (!$microservicio_disponible): ?>
 <div class="alert alert-error no-auto-hide" data-persist="true">
@@ -91,6 +95,7 @@ include __DIR__ . '/../../includes/header.php';
 <div class="alert alert-success no-auto-hide" data-persist="true">
     <strong>✓ Microservicio conectado:</strong> El servicio está disponible y funcionando.
 </div>
+<?php endif; ?>
 <?php endif; ?>
 
 <!-- Sección: Importar archivo único RRHH -->
@@ -1467,4 +1472,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<?php include __DIR__ . '/../../includes/footer.php'; ?>
+<?php 
+// Si se está incluyendo desde mantenimiento, no mostrar footer
+if (!isset($_SOLO_CONTENEDORES) || !$_SOLO_CONTENEDORES) {
+    include __DIR__ . '/../../includes/footer.php';
+}
+?>

@@ -43,26 +43,63 @@
             });
         });
         
-        // Detectar hash en URL al cargar
-        const hash = window.location.hash.replace('#', '');
-        if (hash) {
-            mostrarSeccion(hash);
-        } else {
-            // Mostrar "importar-excel" por defecto
-            const seccionDefault = document.getElementById('importar-excel');
-            if (seccionDefault) {
-                mostrarSeccion('importar-excel');
-            } else if (sections.length > 0) {
-                mostrarSeccion(sections[0].id);
+        // Función para obtener la sección desde URL (hash o parámetro GET)
+        function obtenerSeccionDesdeURL() {
+            // Primero intentar desde el hash
+            let hash = window.location.hash.replace('#', '');
+            // Si el hash contiene &, tomar solo la primera parte (nombre de sección)
+            if (hash && hash.includes('&')) {
+                hash = hash.split('&')[0];
+            }
+            if (hash) {
+                return hash;
+            }
+            
+            // Si no hay hash, intentar desde parámetro GET
+            const urlParams = new URLSearchParams(window.location.search);
+            const seccionParam = urlParams.get('seccion');
+            if (seccionParam) {
+                return seccionParam;
+            }
+            
+            return null;
+        }
+        
+        // Función para inicializar la sección
+        function inicializarSeccion() {
+            const seccionInicial = obtenerSeccionDesdeURL();
+            if (seccionInicial) {
+                mostrarSeccion(seccionInicial);
+            } else {
+                // Mostrar "importar-excel" por defecto
+                const seccionDefault = document.getElementById('importar-excel');
+                if (seccionDefault) {
+                    mostrarSeccion('importar-excel');
+                } else if (sections.length > 0) {
+                    mostrarSeccion(sections[0].id);
+                }
             }
         }
         
+        // Detectar sección en URL al cargar (con pequeño delay para asegurar que el DOM esté listo)
+        setTimeout(function() {
+            inicializarSeccion();
+        }, 100);
+        
+        // También ejecutar inmediatamente por si el DOM ya está listo
+        inicializarSeccion();
+        
         // Escuchar cambios en el hash
         window.addEventListener('hashchange', function() {
-            const hash = window.location.hash.replace('#', '');
-            if (hash) {
-                mostrarSeccion(hash);
+            const seccion = obtenerSeccionDesdeURL();
+            if (seccion) {
+                mostrarSeccion(seccion);
             }
+        });
+        
+        // Escuchar cuando la página se carga completamente (por si viene de redirección)
+        window.addEventListener('load', function() {
+            inicializarSeccion();
         });
     });
     </script>

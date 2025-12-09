@@ -15,7 +15,7 @@
                 <ul>
                     <li><a href="<?php echo BASE_URL; ?>/pages/index.php">Inicio</a></li>
                     <li><a href="<?php echo BASE_URL; ?>/pages/funcionarios/listar.php">Funcionarios</a></li>
-                    <li><a href="<?php echo BASE_URL; ?>/forms/permisos/index.php">Permisos Pendientes</a></li>
+                    <li><a href="<?php echo BASE_URL; ?>/forms/permisos/index.php">Permisos/Vacaciones</a></li>
                     <?php if (isset($_SESSION['autenticado']) && $_SESSION['autenticado']): ?>
                     <li><a href="<?php echo BASE_URL; ?>/services/excel/importar.php#seccion-marcaciones">Importar Marcaciones</a></li>
                     <?php endif; ?>
@@ -47,7 +47,7 @@
                             </span>
                         </span>
                         <?php if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'administrador'): ?>
-                        <a href="<?php echo BASE_URL; ?>/services/excel/importar.php" class="btn-maintenance">
+                        <a href="<?php echo BASE_URL; ?>/pages/mantenimiento/index.php" class="btn-maintenance">
                             <i class="fas fa-tools"></i> Mantenimiento
                         </a>
                         <?php endif; ?>

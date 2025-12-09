@@ -2,28 +2,89 @@
 /**
  * Horario Manual
  * Módulo de Mantenimiento
- * Permite capturar manualmente las horas de entrada y salida para funcionarios marcados como "Manual"
+ * Permite capturar manualmente las horas de entrada y salida para funcionarios
  */
 
 require_once __DIR__ . '/../../classes/Database.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/funciones_calculo_horas.php';
 
+$funcionario = null;
+// Leer parámetros GET (pueden venir directamente o desde el hash parseado)
+$busqueda = isset($_GET['buscar']) ? trim($_GET['buscar']) : '';
+$cedulaSeleccionada = isset($_GET['cedula']) ? sanitize($_GET['cedula']) : '';
+$fechaSeleccionadaRaw = isset($_GET['fecha']) ? trim($_GET['fecha']) : date('Y-m-d');
+$marcacionExistente = null;
+
+// Normalizar la fecha a formato YYYY-MM-DD
+if (preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $fechaSeleccionadaRaw, $matches)) {
+    // Formato MM/DD/YYYY -> YYYY-MM-DD
+    $fechaSeleccionada = sprintf('%04d-%02d-%02d', $matches[3], $matches[1], $matches[2]);
+} else {
+    // Intentar parsear con strtotime
+    $timestamp = strtotime($fechaSeleccionadaRaw);
+    if ($timestamp !== false) {
+        $fechaSeleccionada = date('Y-m-d', $timestamp);
+    } else {
+        $fechaSeleccionada = $fechaSeleccionadaRaw; // Usar tal cual si no se puede parsear
+    }
+}
+
+// Debug: verificar si los parámetros están llegando
+// error_log("GET params: " . print_r($_GET, true));
+
 try {
     $db = Database::getInstance()->getConnection();
     
-    // Obtener funcionarios marcados como "Manual"
-    $stmt = $db->prepare("
-        SELECT cedula, nombre, apellido, fun_extra
-        FROM funcionarios
-        WHERE fun_extra = 'Manual'
-        ORDER BY nombre, apellido
-    ");
-    $stmt->execute();
-    $funcionariosManual = $stmt->fetchAll();
+    // Búsqueda de funcionario (igual a crear_editar.php)
+    if (!empty($busqueda)) {
+        // Buscar por cédula, nombre o apellido
+        $stmt = $db->prepare("
+            SELECT * FROM funcionarios 
+            WHERE cedula LIKE ? OR nombre LIKE ? OR apellido LIKE ?
+            LIMIT 1
+        ");
+        $busquedaLimpia = '%' . $busqueda . '%';
+        $stmt->execute([$busquedaLimpia, $busquedaLimpia, $busquedaLimpia]);
+        $funcionario = $stmt->fetch();
+        
+        if ($funcionario) {
+            $cedulaSeleccionada = $funcionario['cedula'];
+        }
+    }
     
-    // Procesar actualización de marcación
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['accion'] === 'actualizar_marcacion') {
+    // Si viene cédula por GET (desde cambio de fecha o redirección), buscar el funcionario
+    if (!$funcionario && !empty($cedulaSeleccionada)) {
+        $stmt = $db->prepare("SELECT * FROM funcionarios WHERE cedula = ?");
+        $stmt->execute([$cedulaSeleccionada]);
+        $funcionario = $stmt->fetch();
+    }
+    
+    // Si hay funcionario seleccionado y fecha, buscar marcación existente
+    // IMPORTANTE: Siempre resetear $marcacionExistente para evitar valores antiguos
+    $marcacionExistente = null;
+    
+    if ($funcionario && !empty($fechaSeleccionada)) {
+        // La fecha ya está normalizada arriba, usar directamente
+        $fechaFormateada = $fechaSeleccionada;
+        
+        // Buscar con la cédula original (con guiones)
+        $stmtMarcacion = $db->prepare("SELECT * FROM marcaciones WHERE cedula = ? AND fecha = ?");
+        $stmtMarcacion->execute([$funcionario['cedula'], $fechaFormateada]);
+        $marcacionExistente = $stmtMarcacion->fetch(PDO::FETCH_ASSOC);
+        
+        // Si no se encuentra, intentar con la cédula normalizada (sin guiones)
+        if (!$marcacionExistente) {
+            $cedulaNormalizada = normalizarCedula($funcionario['cedula']);
+            $stmtMarcacion2 = $db->prepare("SELECT * FROM marcaciones WHERE cedula = ? AND fecha = ?");
+            $stmtMarcacion2->execute([$cedulaNormalizada, $fechaFormateada]);
+            $marcacionExistente = $stmtMarcacion2->fetch(PDO::FETCH_ASSOC);
+        }
+    }
+    
+    // Procesar actualización de marcación (ahora se hace por AJAX, este código se mantiene por compatibilidad pero no se usa)
+    // El guardado real se hace en guardar_marcacion.php
+    if (false && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['accion'] === 'actualizar_marcacion') {
         $cedula = sanitize($_POST['cedula']);
         $fecha = sanitize($_POST['fecha']);
         $hora_entrada = !empty($_POST['hora_entrada']) ? sanitize($_POST['hora_entrada']) : null;
@@ -108,246 +169,253 @@ try {
                 mostrarMensaje("Marcación creada exitosamente", 'success');
             }
             
+            // Redirigir manteniendo la sección de horario-manual activa
+            // Redirigir usando solo el hash para mantener la sección activa
+            // Los parámetros cedula y fecha se pasan en el hash para que el JavaScript los lea
             redirect(BASE_URL . '/pages/mantenimiento/index.php#horario-manual');
         }
     }
     
-    // Obtener marcaciones de funcionarios manuales
-    $cedulaFiltro = isset($_GET['cedula']) ? sanitize($_GET['cedula']) : '';
-    $fechaFiltro = isset($_GET['fecha']) ? sanitize($_GET['fecha']) : date('Y-m-d');
-    
-    $sqlMarcaciones = "
-        SELECT m.*, f.nombre, f.apellido
-        FROM marcaciones m
-        INNER JOIN funcionarios f ON m.cedula = f.cedula
-        WHERE f.fun_extra = 'Manual'
-    ";
-    $paramsMarcaciones = [];
-    
-    if (!empty($cedulaFiltro)) {
-        $sqlMarcaciones .= " AND m.cedula = ?";
-        $paramsMarcaciones[] = $cedulaFiltro;
-    }
-    
-    if (!empty($fechaFiltro)) {
-        $sqlMarcaciones .= " AND m.fecha = ?";
-        $paramsMarcaciones[] = $fechaFiltro;
-    }
-    
-    $sqlMarcaciones .= " ORDER BY m.fecha DESC, f.nombre, f.apellido LIMIT 100";
-    
-    $stmtMarcaciones = $db->prepare($sqlMarcaciones);
-    $stmtMarcaciones->execute($paramsMarcaciones);
-    $marcaciones = $stmtMarcaciones->fetchAll();
-    
 } catch (Exception $e) {
     mostrarMensaje("Error: " . $e->getMessage(), 'error');
-    $funcionariosManual = [];
-    $marcaciones = [];
+    $funcionario = null;
+    $marcacionExistente = null;
 }
 ?>
 
 <div class="page-content">
     <div class="info-section" style="margin-bottom: 2rem; padding: 1rem; background: #e3f2fd; border-left: 4px solid #2196f3; border-radius: 4px;">
-        <p><strong>Nota:</strong> Esta sección permite capturar manualmente las horas de entrada y salida para funcionarios marcados como "Manual" en el campo <code>fun_extra</code>.</p>
+        <p><strong>Nota:</strong> Esta sección permite capturar manualmente las horas de entrada y salida para funcionarios.</p>
     </div>
     
-    <!-- Filtros -->
-    <div class="filters-section" style="margin-bottom: 2rem; padding: 1.5rem; background: #f8f9fa; border-radius: 8px;">
-        <h3>Filtros</h3>
+    <!-- Búsqueda de Funcionario -->
+    <div class="search-section" style="margin-bottom: 2rem; padding: 1.5rem; background: #f8f9fa; border-radius: 8px;">
+        <h3>Buscar Funcionario para Editar</h3>
         <form method="GET" action="" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
             <input type="hidden" name="seccion" value="horario-manual">
-            <div>
-                <label for="cedula_filtro">Funcionario:</label>
-                <select id="cedula_filtro" name="cedula" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-                    <option value="">Todos</option>
-                    <?php foreach ($funcionariosManual as $func): ?>
-                    <option value="<?php echo htmlspecialchars($func['cedula']); ?>" 
-                            <?php echo (isset($_GET['cedula']) && $_GET['cedula'] === $func['cedula']) ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($func['nombre'] ?? ''); ?> <?php echo htmlspecialchars($func['apellido'] ?? ''); ?>
-                        (<?php echo htmlspecialchars($func['cedula']); ?>)
-                    </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div>
-                <label for="fecha_filtro">Fecha:</label>
-                <input type="date" 
-                       id="fecha_filtro" 
-                       name="fecha" 
-                       value="<?php echo htmlspecialchars($fechaFiltro); ?>"
-                       style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+            <?php if ($funcionario): ?>
+                <input type="hidden" name="cedula" value="<?php echo htmlspecialchars($funcionario['cedula']); ?>">
+            <?php endif; ?>
+            <?php if (!empty($fechaSeleccionada)): ?>
+                <input type="hidden" name="fecha" value="<?php echo htmlspecialchars($fechaSeleccionada); ?>">
+            <?php endif; ?>
+            <div style="flex: 1; min-width: 300px;">
+                <label for="buscar_funcionario">Buscar por Cédula, Nombre o Apellido:</label>
+                <input type="text" 
+                       id="buscar_funcionario" 
+                       name="buscar" 
+                       value="<?php echo htmlspecialchars($busqueda); ?>"
+                       placeholder="Ingrese cédula, nombre o apellido"
+                       style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
             </div>
             <button type="submit" class="btn btn-primary">
-                <i class="fas fa-filter"></i> Filtrar
+                <i class="fas fa-search"></i> Buscar
             </button>
-            <a href="<?php echo BASE_URL; ?>/pages/mantenimiento/index.php#horario-manual" class="btn">
-                Limpiar
-            </a>
+            <?php if (!empty($busqueda) || !empty($cedulaSeleccionada)): ?>
+                <a href="<?php echo BASE_URL; ?>/pages/mantenimiento/index.php?seccion=horario-manual#horario-manual" class="btn btn-secondary">
+                    Limpiar
+                </a>
+            <?php endif; ?>
         </form>
-    </div>
-    
-    <!-- Lista de Funcionarios Manuales -->
-    <div class="funcionarios-section" style="margin-bottom: 2rem;">
-        <h3>Funcionarios con Horario Manual (<?php echo count($funcionariosManual); ?>)</h3>
-        <?php if (count($funcionariosManual) === 0): ?>
-        <div class="alert alert-info">
-            No hay funcionarios marcados como "Manual". 
-            Puedes marcar funcionarios como "Manual" desde la <a href="<?php echo BASE_URL; ?>/pages/funcionarios/listar.php">Lista de Funcionarios</a>.
-        </div>
-        <?php else: ?>
-        <div class="table-responsive">
-            <table class="table-excel" style="width: 100%;">
-                <thead>
-                    <tr>
-                        <th>Cédula</th>
-                        <th>Nombre</th>
-                        <th>Apellido</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($funcionariosManual as $func): ?>
-                    <tr>
-                        <td><?php echo htmlspecialchars($func['cedula']); ?></td>
-                        <td><?php echo htmlspecialchars($func['nombre'] ?? ''); ?></td>
-                        <td><?php echo htmlspecialchars($func['apellido'] ?? ''); ?></td>
-                        <td>
-                            <a href="<?php echo BASE_URL; ?>/pages/mantenimiento/index.php#horario-manual&cedula=<?php echo urlencode($func['cedula']); ?>&fecha=<?php echo date('Y-m-d'); ?>" 
-                               class="btn btn-sm btn-primary">
-                                <i class="fas fa-clock"></i> Registrar Horario
-                            </a>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
+        
+        <?php if (!empty($busqueda) && !$funcionario): ?>
+            <div class="alert alert-warning" style="margin-top: 1rem;">
+                No se encontró ningún funcionario con "<?php echo htmlspecialchars($busqueda); ?>"
+            </div>
         <?php endif; ?>
     </div>
     
     <!-- Formulario de Registro/Edición -->
+    <?php if ($funcionario): ?>
     <div class="form-section" style="margin-bottom: 2rem; padding: 1.5rem; background: #fff; border: 1px solid #ddd; border-radius: 8px;">
         <h3>Registrar/Editar Horario</h3>
-        <form method="POST" action="" style="max-width: 600px;">
-            <input type="hidden" name="accion" value="actualizar_marcacion">
-            <div class="form-group">
-                <label for="cedula_select">Funcionario *</label>
-                <select id="cedula_select" name="cedula" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-                    <option value="">Seleccione un funcionario</option>
-                    <?php foreach ($funcionariosManual as $func): ?>
-                    <option value="<?php echo htmlspecialchars($func['cedula']); ?>"
-                            <?php echo (isset($_GET['cedula']) && $_GET['cedula'] === $func['cedula']) ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($func['nombre'] ?? ''); ?> <?php echo htmlspecialchars($func['apellido'] ?? ''); ?>
-                        (<?php echo htmlspecialchars($func['cedula']); ?>)
-                    </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
+        
+        <!-- Mostrar información del funcionario encontrado -->
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: #e8f5e9; border-left: 4px solid #4caf50; border-radius: 4px;">
+            <p style="margin: 0; font-weight: bold; color: #2e7d32;">
+                <i class="fas fa-user"></i> 
+                <?php echo htmlspecialchars($funcionario['nombre'] ?? ''); ?> 
+                <?php echo htmlspecialchars($funcionario['apellido'] ?? ''); ?> 
+                - 
+                <?php echo htmlspecialchars($funcionario['cedula']); ?>
+            </p>
+        </div>
+        
+        <form id="form-horario-manual" style="max-width: 600px;">
+            <input type="hidden" id="cedula_hidden" value="<?php echo htmlspecialchars($funcionario['cedula']); ?>">
+            
             <div class="form-group">
                 <label for="fecha_input">Fecha *</label>
                 <input type="date" 
                        id="fecha_input" 
                        name="fecha" 
                        required
-                       value="<?php echo htmlspecialchars($fechaFiltro); ?>"
+                       value="<?php echo htmlspecialchars($fechaSeleccionada); ?>"
+                       onchange="cambiarFecha()"
                        style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
             </div>
+            
             <div class="form-group">
                 <label for="hora_entrada">Hora de Entrada</label>
                 <input type="time" 
                        id="hora_entrada" 
                        name="hora_entrada"
+                       value="<?php 
+                       // Asegurar que solo se muestre la hora si hay marcación para esta fecha específica
+                       if ($marcacionExistente && isset($marcacionExistente['hora_entrada']) && !empty($marcacionExistente['hora_entrada'])) {
+                           echo htmlspecialchars(substr($marcacionExistente['hora_entrada'], 0, 5));
+                       } else {
+                           echo ''; // Limpiar campo si no hay marcación
+                       }
+                       ?>"
                        style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
             </div>
+            
             <div class="form-group">
                 <label for="hora_salida">Hora de Salida</label>
                 <input type="time" 
                        id="hora_salida" 
                        name="hora_salida"
+                       value="<?php 
+                       // Asegurar que solo se muestre la hora si hay marcación para esta fecha específica
+                       if ($marcacionExistente && isset($marcacionExistente['hora_salida']) && !empty($marcacionExistente['hora_salida'])) {
+                           echo htmlspecialchars(substr($marcacionExistente['hora_salida'], 0, 5));
+                       } else {
+                           echo ''; // Limpiar campo si no hay marcación
+                       }
+                       ?>"
                        style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
             </div>
+            
+            <div id="mensaje-horario" style="margin-top: 1rem; display: none;"></div>
+            
             <div class="form-actions" style="margin-top: 1rem;">
-                <button type="submit" class="btn btn-success">
+                <button type="submit" class="btn btn-success" id="btn-guardar-horario">
                     <i class="fas fa-save"></i> Guardar Horario
                 </button>
+                <a href="<?php echo BASE_URL; ?>/pages/mantenimiento/index.php#horario-manual" class="btn btn-secondary">
+                    Cancelar
+                </a>
             </div>
         </form>
     </div>
-    
-    <!-- Lista de Marcaciones Recientes -->
-    <div class="marcaciones-section">
-        <h3>Marcaciones Recientes</h3>
-        <?php if (count($marcaciones) === 0): ?>
-        <div class="alert alert-info">
-            No hay marcaciones registradas para los filtros seleccionados.
-        </div>
-        <?php else: ?>
-        <div class="table-responsive">
-            <table class="table-excel" style="width: 100%;">
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Funcionario</th>
-                        <th>Cédula</th>
-                        <th>Hora Entrada</th>
-                        <th>Hora Salida</th>
-                        <th>Horas Trabajadas</th>
-                        <th>Tardanza/Irregular</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($marcaciones as $marc): ?>
-                    <tr>
-                        <td><?php echo htmlspecialchars($marc['fecha']); ?></td>
-                        <td><?php echo htmlspecialchars($marc['nombre'] ?? ''); ?> <?php echo htmlspecialchars($marc['apellido'] ?? ''); ?></td>
-                        <td><?php echo htmlspecialchars($marc['cedula']); ?></td>
-                        <td>
-                            <?php 
-                            if ($marc['hora_entrada']) {
-                                $hora = new DateTime($marc['hora_entrada']);
-                                echo $hora->format('g:i a.m.');
-                            } else {
-                                echo '<span style="color: #dc3545;">-</span>';
-                            }
-                            ?>
-                        </td>
-                        <td>
-                            <?php 
-                            if ($marc['hora_salida']) {
-                                $hora = new DateTime($marc['hora_salida']);
-                                echo $hora->format('g:i a.m.');
-                            } else {
-                                echo '<span style="color: #dc3545;">-</span>';
-                            }
-                            ?>
-                        </td>
-                        <td>
-                            <?php 
-                            if ($marc['horas_trabajadas']) {
-                                $horas = new DateTime($marc['horas_trabajadas']);
-                                echo $horas->format('H:i');
-                            } else {
-                                echo '<span style="color: #dc3545;">-</span>';
-                            }
-                            ?>
-                        </td>
-                        <td>
-                            <?php 
-                            if ($marc['tiempo_faltante'] && $marc['tiempo_faltante'] !== '00:00:00') {
-                                $faltante = new DateTime($marc['tiempo_faltante']);
-                                echo '<span style="color: #721c24; font-weight: bold;">' . $faltante->format('H:i') . '</span>';
-                            } else {
-                                echo '00:00';
-                            }
-                            ?>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-        <?php endif; ?>
-    </div>
+    <?php endif; ?>
 </div>
+
+<script>
+function cambiarFecha() {
+    const fecha = document.getElementById('fecha_input').value;
+    const cedulaInput = document.getElementById('cedula_hidden');
+    const cedula = cedulaInput ? cedulaInput.value : '';
+    const horaEntradaInput = document.getElementById('hora_entrada');
+    const horaSalidaInput = document.getElementById('hora_salida');
+    
+    if (fecha && cedula) {
+        // Limpiar campos mientras se busca
+        if (horaEntradaInput) horaEntradaInput.value = '';
+        if (horaSalidaInput) horaSalidaInput.value = '';
+        
+        // Hacer petición AJAX para obtener la marcación
+        fetch('<?php echo BASE_URL; ?>/pages/mantenimiento/obtener_marcacion.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                cedula: cedula,
+                fecha: fecha
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.marcacion) {
+                // Llenar campos con los valores encontrados
+                if (horaEntradaInput && data.marcacion.hora_entrada) {
+                    horaEntradaInput.value = data.marcacion.hora_entrada.substring(0, 5);
+                }
+                if (horaSalidaInput && data.marcacion.hora_salida) {
+                    horaSalidaInput.value = data.marcacion.hora_salida.substring(0, 5);
+                }
+            } else {
+                // No hay marcación, campos ya están limpios
+                console.log('No se encontró marcación para esta fecha');
+            }
+        })
+        .catch(error => {
+            console.error('Error al obtener marcación:', error);
+        });
+        
+    }
+}
+
+// Manejar envío del formulario con AJAX
+document.addEventListener('DOMContentLoaded', function() {
+    const formHorario = document.getElementById('form-horario-manual');
+    const mensajeDiv = document.getElementById('mensaje-horario');
+    const btnGuardar = document.getElementById('btn-guardar-horario');
+    
+    if (formHorario) {
+        formHorario.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const cedula = document.getElementById('cedula_hidden').value;
+            const fecha = document.getElementById('fecha_input').value;
+            const horaEntrada = document.getElementById('hora_entrada').value;
+            const horaSalida = document.getElementById('hora_salida').value;
+            
+            if (!cedula || !fecha) {
+                mostrarMensaje('Cédula y fecha son obligatorios', 'error');
+                return;
+            }
+            
+            // Deshabilitar botón mientras se guarda
+            btnGuardar.disabled = true;
+            btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+            
+            // Hacer petición AJAX para guardar
+            fetch('<?php echo BASE_URL; ?>/pages/mantenimiento/guardar_marcacion.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    cedula: cedula,
+                    fecha: fecha,
+                    hora_entrada: horaEntrada || null,
+                    hora_salida: horaSalida || null
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarMensaje(data.message, 'success');
+                    // Ocultar mensaje después de 3 segundos
+                    setTimeout(function() {
+                        mensajeDiv.style.display = 'none';
+                    }, 3000);
+                } else {
+                    mostrarMensaje('Error: ' + (data.error || 'Error desconocido'), 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error al guardar marcación:', error);
+                mostrarMensaje('Error de comunicación con el servidor', 'error');
+            })
+            .finally(function() {
+                // Rehabilitar botón
+                btnGuardar.disabled = false;
+                btnGuardar.innerHTML = '<i class="fas fa-save"></i> Guardar Horario';
+            });
+        });
+    }
+    
+    function mostrarMensaje(mensaje, tipo) {
+        if (mensajeDiv) {
+            mensajeDiv.style.display = 'block';
+            mensajeDiv.className = 'alert alert-' + (tipo === 'success' ? 'success' : 'error');
+            mensajeDiv.innerHTML = '<strong>' + (tipo === 'success' ? '✓' : '✗') + '</strong> ' + mensaje;
+        }
+    }
+});
+</script>
 
