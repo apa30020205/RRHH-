@@ -229,8 +229,6 @@ try {
                         <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6; min-width: 120px;">Fecha</th>
                         <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6; min-width: 150px;">Hora Entrada</th>
                         <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6; min-width: 150px;">Hora Salida</th>
-                        <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6; min-width: 120px;">Horas Trabajadas</th>
-                        <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6; min-width: 120px;">Tardanza/Irregular</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -268,30 +266,6 @@ try {
                                        }
                                        ?>"
                                        style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 3px; text-align: center; font-size: 0.95em; background: #fff;">
-                            </td>
-                            <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center;">
-                                <?php 
-                                if ($marcacion['horas_trabajadas']) {
-                                    $horas = new DateTime($marcacion['horas_trabajadas']);
-                                    echo $horas->format('H:i');
-                                } else {
-                                    echo '<span style="color: #999;">-</span>';
-                                }
-                                ?>
-                            </td>
-                            <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php 
-                                if ($marcacion['tiempo_faltante'] && $marcacion['tiempo_faltante'] !== '00:00:00') {
-                                    echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
-                                }
-                            ?>">
-                                <?php 
-                                if ($marcacion['tiempo_faltante']) {
-                                    $faltante = new DateTime($marcacion['tiempo_faltante']);
-                                    echo $faltante->format('H:i');
-                                } else {
-                                    echo '00:00';
-                                }
-                                ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -390,24 +364,56 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Función para formatear hora automáticamente con a.m./p.m.
-    function formatearHoraConAMPM(input) {
+    // tipo: 'entrada' o 'salida' para inferir mejor a.m./p.m.
+    function formatearHoraConAMPM(input, tipo = 'entrada') {
         const valor = input.value.trim();
         
         if (valor === '') {
             return;
         }
         
-        // Si ya tiene a.m. o p.m., no hacer nada
-        if (valor.toLowerCase().includes('a.m.') || valor.toLowerCase().includes('p.m.')) {
-            return;
+        // Detectar si el usuario especificó a.m./p.m. manualmente
+        let valorLimpio = valor;
+        let tieneAMPM = false;
+        let esAM = false;
+        
+        // Buscar a.m. o p.m. (con o sin puntos, con o sin espacios)
+        const regexAM = /a\.?m\.?/i;
+        const regexPM = /p\.?m\.?/i;
+        
+        if (regexAM.test(valorLimpio)) {
+            // El usuario especificó a.m. (con o sin puntos)
+            valorLimpio = valorLimpio.replace(/a\.?m\.?/gi, '').trim();
+            tieneAMPM = true;
+            esAM = true;
+        } else if (regexPM.test(valorLimpio)) {
+            // El usuario especificó p.m. (con o sin puntos)
+            valorLimpio = valorLimpio.replace(/p\.?m\.?/gi, '').trim();
+            tieneAMPM = true;
+            esAM = false;
         }
         
         // Validar formato HH:MM o H:MM
         const regexHora = /^(\d{1,2}):(\d{2})$/;
-        const match = valor.match(regexHora);
+        const match = valorLimpio.match(regexHora);
         
         if (!match) {
-            return; // Formato inválido, no formatear
+            // Si no coincide con el formato esperado pero tiene a.m./p.m., normalizar el formato
+            if (tieneAMPM) {
+                // Intentar extraer la hora aunque el formato no sea perfecto
+                const matchHora = valor.match(/^(\d{1,2}):(\d{2})/);
+                if (matchHora) {
+                    let horas = parseInt(matchHora[1], 10);
+                    const minutos = matchHora[2];
+                    const ampm = esAM ? 'a.m.' : 'p.m.';
+                    // Ajustar horas si es necesario
+                    if (esAM && horas === 0) {
+                        horas = 12;
+                    }
+                    input.value = horas + ':' + minutos + ' ' + ampm;
+                }
+            }
+            return;
         }
         
         let horas = parseInt(match[1], 10);
@@ -415,34 +421,71 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Determinar a.m./p.m.
         let ampm = '';
-        if (horas === 0) {
-            horas = 12;
-            ampm = 'a.m.';
-        } else if (horas < 12) {
-            ampm = 'a.m.';
-        } else if (horas === 12) {
-            ampm = 'p.m.';
+        
+        if (tieneAMPM) {
+            // El usuario especificó a.m. o p.m., normalizar a formato con puntos (a.m./p.m.)
+            ampm = esAM ? 'a.m.' : 'p.m.';
+            // Ajustar horas si es necesario
+            if (esAM && horas === 0) {
+                horas = 12; // 0:00 a.m. = 12:00 a.m.
+            }
+            // Si es p.m. y la hora es 1-11, mantenerla (ya está en formato 12h)
+            // Si es p.m. y la hora es 12, mantenerla
         } else {
-            horas -= 12;
-            ampm = 'p.m.';
+            // No especificó a.m./p.m., inferir según el tipo
+            if (horas === 0) {
+                horas = 12;
+                ampm = 'a.m.';
+            } else if (horas < 12) {
+                // 1-11: inferir según el tipo
+                if (tipo === 'entrada') {
+                    ampm = 'a.m.'; // Sugerencia para entrada
+                } else {
+                    ampm = 'p.m.'; // Sugerencia para salida
+                }
+            } else if (horas === 12) {
+                ampm = 'p.m.';
+            } else {
+                // 13-23: convertir a formato 12h y marcar como p.m.
+                horas -= 12;
+                ampm = 'p.m.';
+            }
         }
         
-        // Actualizar el valor del input
+        // Actualizar el valor del input con formato normalizado (a.m./p.m. con puntos)
         input.value = horas + ':' + minutos + ' ' + ampm;
     }
     
-    // Aplicar formateo automático a todos los inputs de hora
+    // Guardar valores iniciales de todos los inputs para detectar cambios
+    const valoresIniciales = new Map();
     const inputsHora = document.querySelectorAll('.input-hora-entrada, .input-hora-salida');
     inputsHora.forEach(function(input) {
-        // Formatear al perder el foco (blur)
+        // Guardar valor inicial
+        const fecha = input.getAttribute('data-fecha');
+        const tipo = input.classList.contains('input-hora-entrada') ? 'entrada' : 'salida';
+        const clave = fecha + '_' + tipo;
+        valoresIniciales.set(clave, input.value.trim());
+        
+        // Formatear al perder el foco (blur), pasando el tipo (entrada/salida)
+        // Siempre normalizar el formato a.m./p.m. con puntos
         input.addEventListener('blur', function() {
-            formatearHoraConAMPM(this);
+            const valor = this.value.trim();
+            // Si el campo está vacío, no hacer nada
+            if (valor === '') {
+                return;
+            }
+            // Siempre formatear para normalizar a.m./p.m. con puntos
+            // Esto asegura que "4:00 pm" se convierta a "4:00 p.m."
+            const tipoInput = this.classList.contains('input-hora-entrada') ? 'entrada' : 'salida';
+            formatearHoraConAMPM(this, tipoInput);
         });
         
-        // Permitir solo números, dos puntos y espacios
+        // Permitir números, dos puntos, espacios y letras (para a.m./p.m.)
         input.addEventListener('keypress', function(e) {
             const char = String.fromCharCode(e.which);
-            if (!/[0-9:]/.test(char) && e.which !== 32) {
+            // Permitir números, dos puntos, espacios y letras a, m, p (para escribir a.m./p.m.)
+            if (!/[0-9:]/.test(char) && e.which !== 32 && 
+                !/[aApPmM]/.test(char) && e.which !== 46) { // 46 es el punto (.)
                 e.preventDefault();
             }
         });
@@ -472,36 +515,57 @@ document.addEventListener('DOMContentLoaded', function() {
     // Guardar todas las marcaciones
     if (btnGuardarTodo && cedula) {
         btnGuardarTodo.addEventListener('click', function() {
-            // Recopilar todas las marcaciones de la tabla
+            // Recopilar solo las marcaciones que fueron modificadas
             const marcaciones = [];
             const filas = document.querySelectorAll('#tabla-horarios tbody tr');
+            let hayErrores = false;
             
             filas.forEach(function(fila) {
                 const fecha = fila.getAttribute('data-fecha');
                 const inputEntrada = fila.querySelector('.input-hora-entrada');
                 const inputSalida = fila.querySelector('.input-hora-salida');
                 
-                if (fecha) {
+                if (!fecha) return;
+                
+                // Obtener valores actuales
+                const valorEntradaActual = inputEntrada ? inputEntrada.value.trim() : '';
+                const valorSalidaActual = inputSalida ? inputSalida.value.trim() : '';
+                
+                // Obtener valores iniciales
+                const claveEntrada = fecha + '_entrada';
+                const claveSalida = fecha + '_salida';
+                const valorEntradaInicial = valoresIniciales.get(claveEntrada) || '';
+                const valorSalidaInicial = valoresIniciales.get(claveSalida) || '';
+                
+                // Verificar si hubo cambios
+                const entradaCambio = valorEntradaActual !== valorEntradaInicial;
+                const salidaCambio = valorSalidaActual !== valorSalidaInicial;
+                
+                // Solo procesar si hubo cambios
+                if (entradaCambio || salidaCambio) {
                     // Convertir horas de formato 12h a 24h antes de enviar
                     let horaEntrada24 = null;
                     let horaSalida24 = null;
                     
-                    if (inputEntrada && inputEntrada.value.trim() !== '') {
-                        horaEntrada24 = convertirHora12a24(inputEntrada.value);
+                    if (valorEntradaActual !== '') {
+                        horaEntrada24 = convertirHora12a24(valorEntradaActual);
                         if (!horaEntrada24) {
                             mostrarMensaje('Error: Formato de hora de entrada inválido en fecha ' + fecha, 'error');
+                            hayErrores = true;
                             return;
                         }
                     }
                     
-                    if (inputSalida && inputSalida.value.trim() !== '') {
-                        horaSalida24 = convertirHora12a24(inputSalida.value);
+                    if (valorSalidaActual !== '') {
+                        horaSalida24 = convertirHora12a24(valorSalidaActual);
                         if (!horaSalida24) {
                             mostrarMensaje('Error: Formato de hora de salida inválido en fecha ' + fecha, 'error');
+                            hayErrores = true;
                             return;
                         }
                     }
                     
+                    // Solo agregar si hay al menos un cambio válido
                     marcaciones.push({
                         fecha: fecha,
                         hora_entrada: horaEntrada24,
@@ -510,8 +574,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
             
+            if (hayErrores) {
+                return;
+            }
+            
             if (marcaciones.length === 0) {
-                mostrarMensaje('No hay marcaciones para guardar', 'error');
+                mostrarMensaje('No hay cambios para guardar', 'info');
                 return;
             }
             
@@ -557,8 +625,25 @@ document.addEventListener('DOMContentLoaded', function() {
     function mostrarMensaje(mensaje, tipo) {
         if (mensajeDiv) {
             mensajeDiv.style.display = 'block';
-            mensajeDiv.className = 'alert alert-' + (tipo === 'success' ? 'success' : 'error');
-            mensajeDiv.innerHTML = '<strong>' + (tipo === 'success' ? '✓' : '✗') + '</strong> ' + mensaje;
+            let clase = 'alert alert-';
+            let icono = '';
+            
+            if (tipo === 'success') {
+                clase += 'success';
+                icono = '✓';
+            } else if (tipo === 'error') {
+                clase += 'error';
+                icono = '✗';
+            } else if (tipo === 'info') {
+                clase += 'info';
+                icono = 'ℹ';
+            } else {
+                clase += 'info';
+                icono = 'ℹ';
+            }
+            
+            mensajeDiv.className = clase;
+            mensajeDiv.innerHTML = '<strong>' + icono + '</strong> ' + mensaje;
         }
     }
 });
