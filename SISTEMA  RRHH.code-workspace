@@ -5,6 +5,40 @@
 		}
 	],
 	"settings": {
-		"php.validate.executablePath": "C:\\laragon\\bin\\php\\php-8.3.26-Win32-vs16-x64\\php.exe"
+		"php.validate.executablePath": "C:\\laragon\\bin\\php\\php-8.3.26-Win32-vs16-x64\\php.exe",
+		"git.enabled": true,
+		"github.pullRequests.enabled": false,
+		"github.gitAuthentication": false,
+		"github.copilot.enable": false,
+		"git.autofetch": false,
+		"git.confirmSync": true,
+		"git.enableSmartCommit": false,
+		"git.suggestSmartCommit": false,
+		"git.autofetchPeriod": 0,
+		"git.postCommitCommand": "none",
+		"git.showCommitInput": false,
+		"git.enableStatusBarSync": false,
+		"git.autoRepositoryDetection": false,
+		"git.decorations.enabled": false,
+		"git.autoStash": false,
+		"git.ignoreLimitWarning": true,
+		"git.ignoreSubmodules": true,
+		"git.path": "",
+		"git.scanRepositories": [],
+		"git.timeline.enabled": false,
+		"scm.diffDecorations": "none",
+		"scm.diffDecorationsGutterVisibility": "hover",
+		"scm.alwaysShowProviders": false,
+		"scm.alwaysShowRepositories": false,
+		"scm.defaultViewMode": "tree",
+		"workbench.editor.enablePreview": false,
+		"workbench.startupEditor": "none",
+		"cursor.chat.autoSuggest": false,
+		"files.watcherExclude": {
+			"**/.git/**": true
+		}
+	},
+	"extensions": {
+		"recommendations": []
 	}
 }

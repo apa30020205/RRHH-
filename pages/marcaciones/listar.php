@@ -279,8 +279,8 @@ try {
 include __DIR__ . '/../../includes/header.php';
 ?>
 
-<div class="page-header">
-    <h2>Marcaciones Biométricas<?php echo !empty($nombreFuncionario) ? ' - ' . htmlspecialchars($nombreCompleto) . ' - ' . htmlspecialchars($cedulaFiltro) : ''; ?></h2>
+<div class="page-header" style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+    <h2 style="margin: 0; flex-shrink: 0;">Marcaciones Biométricas<?php echo !empty($nombreFuncionario) ? ' - ' . htmlspecialchars($nombreCompleto) . ' - ' . htmlspecialchars($cedulaFiltro) : ''; ?></h2>
     <?php if (!empty($cedulaFiltro) && !$exFuncionario): 
         // Convertir horas a formato 12 horas para visualización
         $hEntradaFormato = $hEntrada ? date('g:i', strtotime($hEntrada)) : '08:00';
@@ -288,50 +288,60 @@ include __DIR__ . '/../../includes/header.php';
         $hSalidaFormato = $hSalida ? date('g:i', strtotime($hSalida)) : '04:00';
         $hSalidaAMPM = $hSalida ? (date('H', strtotime($hSalida)) < 12 ? 'a.m.' : 'p.m.') : 'p.m.';
     ?>
-    <div class="horario-container" style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 5px;">
-        <form id="form-horario" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <span style="font-weight: 500;">Horario de:</span>
-            <input type="time" 
-                   id="h_entrada" 
-                   name="h_entrada" 
-                   value="<?php echo $hEntrada ? date('H:i', strtotime($hEntrada)) : '08:00'; ?>" 
-                   style="padding: 0.4rem; border: 1px solid #ddd; border-radius: 3px; width: 100px;"
-                   required>
-            <span id="h_entrada_display"><?php echo htmlspecialchars($hEntradaFormato . ' ' . $hEntradaAMPM); ?></span>
-            <span>hasta</span>
-            <input type="time" 
-                   id="h_salida" 
-                   name="h_salida" 
-                   value="<?php echo $hSalida ? date('H:i', strtotime($hSalida)) : '16:00'; ?>" 
-                   style="padding: 0.4rem; border: 1px solid #ddd; border-radius: 3px; width: 100px;"
-                   required>
-            <span id="h_salida_display"><?php echo htmlspecialchars($hSalidaFormato . ' ' . $hSalidaAMPM); ?></span>
-            <button type="button" 
-                    id="btn-guardar-horario" 
-                    class="btn btn-primary" 
-                    style="margin-left: 0.5rem;">
-                Guardar
-            </button>
-            <span id="mensaje-horario" style="margin-left: 0.5rem; color: #28a745; font-weight: bold; display: none;"></span>
+    <form id="form-horario" style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; flex: 1; min-width: 0;">
+        <span style="font-weight: bold; font-size: 1.05em;">Horario de:</span>
+        <input type="time" 
+               id="h_entrada" 
+               name="h_entrada" 
+               value="<?php echo $hEntrada ? date('H:i', strtotime($hEntrada)) : '08:00'; ?>" 
+               style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px; width: 140px; font-size: 1.1em;"
+               required>
+        <span style="font-weight: bold; font-size: 1.05em;">hasta</span>
+        <input type="time" 
+               id="h_salida" 
+               name="h_salida" 
+               value="<?php echo $hSalida ? date('H:i', strtotime($hSalida)) : '16:00'; ?>" 
+               style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px; width: 140px; font-size: 1.1em;"
+               required>
+        <button type="button" 
+                id="btn-guardar-horario" 
+                class="btn btn-primary" 
+                style="margin-left: 0.6rem; padding: 0.5rem 1.2rem; font-size: 1.05em;">
+            Guardar
+        </button>
+        <span id="mensaje-horario" style="margin-left: 0.6rem; color: #28a745; font-weight: bold; font-size: 1.05em; display: none;"></span>
+    </form>
+    <?php endif; ?>
+    <?php if (empty($cedulaFiltro)): ?>
+    <div style="flex-shrink: 0;">
+        <form method="GET" action="" style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="text" name="buscar" placeholder="Buscar por cédula, nombre, apellido..." 
+                   value="<?php echo htmlspecialchars($busqueda); ?>" 
+                   style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px; min-width: 250px;">
+            <?php if (!empty($fechaDesde)): ?>
+            <input type="hidden" name="fecha_desde" value="<?php echo htmlspecialchars($fechaDesde); ?>">
+            <?php endif; ?>
+            <?php if (!empty($fechaHasta)): ?>
+            <input type="hidden" name="fecha_hasta" value="<?php echo htmlspecialchars($fechaHasta); ?>">
+            <?php endif; ?>
+            <button type="submit" class="btn btn-primary">Buscar</button>
         </form>
     </div>
     <?php endif; ?>
 </div>
 
-<!-- Formulario de búsqueda y filtros -->
+<!-- Formulario de filtros de fecha -->
+<?php if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)): ?>
 <form method="GET" action="" class="search-form" style="background: #f8f9fa; padding: 1rem; border-radius: 5px; margin-bottom: 1.5rem;">
     <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-        <?php if (empty($cedulaFiltro)): ?>
-        <div style="flex: 1; min-width: 200px;">
-            <input type="text" name="buscar" placeholder="Buscar por cédula, nombre, apellido, fecha, hora..." 
-                   value="<?php echo htmlspecialchars($busqueda); ?>" 
-                   style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px;">
-        </div>
-        <?php else: ?>
+        <?php if (!empty($cedulaFiltro)): ?>
         <input type="hidden" name="cedula" value="<?php echo htmlspecialchars($cedulaFiltro); ?>">
         <?php endif; ?>
         <?php if ($exFuncionario): ?>
         <input type="hidden" name="ex_funcionario" value="1">
+        <?php endif; ?>
+        <?php if (empty($cedulaFiltro)): ?>
+        <input type="hidden" name="buscar" value="<?php echo htmlspecialchars($busqueda); ?>">
         <?php endif; ?>
         <div style="min-width: 150px;">
             <label style="display: block; font-size: 0.9em; margin-bottom: 0.25rem; color: #666;">Desde:</label>
@@ -351,11 +361,12 @@ include __DIR__ . '/../../includes/header.php';
                     if (!empty($cedulaFiltro)) $params['cedula'] = $cedulaFiltro;
                     if ($exFuncionario) $params['ex_funcionario'] = '1';
                     echo !empty($params) ? '?' . http_build_query($params) : '';
-                ?>" class="btn btn-secondary">Limpiar</a>
+                ?>" class="btn btn-secondary" style="font-weight: bold; color: #17a2b8;">Limpiar</a>
             <?php endif; ?>
         </div>
     </div>
 </form>
+<?php endif; ?>
 
 <!-- Tabla de marcaciones -->
 <?php if (count($marcaciones) > 0): ?>
@@ -615,32 +626,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnGuardar = document.getElementById('btn-guardar-horario');
     const hEntrada = document.getElementById('h_entrada');
     const hSalida = document.getElementById('h_salida');
-    const hEntradaDisplay = document.getElementById('h_entrada_display');
-    const hSalidaDisplay = document.getElementById('h_salida_display');
     const mensajeHorario = document.getElementById('mensaje-horario');
-    
-    // Función para convertir hora 24h a formato 12h con a.m./p.m.
-    function formatearHora12(hora24) {
-        const [horas, minutos] = hora24.split(':');
-        const h = parseInt(horas);
-        const m = minutos;
-        const ampm = h < 12 ? 'a.m.' : 'p.m.';
-        const h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
-        return h12 + ':' + m + ' ' + ampm;
-    }
-    
-    // Actualizar display cuando cambian los campos de tiempo
-    if (hEntrada && hEntradaDisplay) {
-        hEntrada.addEventListener('change', function() {
-            hEntradaDisplay.textContent = formatearHora12(this.value);
-        });
-    }
-    
-    if (hSalida && hSalidaDisplay) {
-        hSalida.addEventListener('change', function() {
-            hSalidaDisplay.textContent = formatearHora12(this.value);
-        });
-    }
     
     if (btnGuardar) {
         btnGuardar.addEventListener('click', function() {
