@@ -7,6 +7,7 @@
 require_once __DIR__ . '/../../roles_rrhh/middleware/auth_middleware.php';
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/funciones_calculo_horas.php';
 require_once __DIR__ . '/../../classes/Database.php';
 require_once __DIR__ . '/../../roles_rrhh/classes/Auth.php';
 
@@ -162,42 +163,104 @@ try {
     $stmtCount->execute($params);
     $totalRegistros = $stmtCount->fetch()['total'];
     
-    // Calcular sumas totales de horas trabajadas y tardanzas
-    // Usar SUM de segundos para manejar correctamente sumas mayores a 24 horas
-    $sqlSumas = "SELECT 
-                    COALESCE(SUM(TIME_TO_SEC(COALESCE(m.horas_trabajadas, '00:00:00'))), 0) as total_segundos_horas,
-                    COALESCE(SUM(TIME_TO_SEC(COALESCE(m.tiempo_faltante, '00:00:00'))), 0) as total_segundos_tardanzas
-                 FROM $tablaMarcaciones m
-                 LEFT JOIN $tablaFuncionarios f ON m.cedula = f.cedula";
-    if (!empty($condiciones)) {
-        $sqlSumas .= " WHERE " . implode(" AND ", $condiciones);
+    // Calcular sumas totales de horas contabilizadas y tardanzas
+    // IMPORTANTE: La BD guarda horas reales, pero aquí calculamos horas contabilizadas para visualización
+    $totalHorasContabilizadas = 0; // En minutos
+    $totalTardanzasMinutos = 0; // En minutos
+    
+    // Si hay un funcionario específico, obtener su horario
+    $hEntradaFunc = null;
+    $hSalidaFunc = null;
+    if (!empty($cedulaFiltro) && !$exFuncionario) {
+        $stmtHorario = $db->prepare("SELECT h_entrada, h_salida FROM funcionarios WHERE cedula = ?");
+        $stmtHorario->execute([$cedulaFiltro]);
+        $horarioFunc = $stmtHorario->fetch();
+        if ($horarioFunc) {
+            $hEntradaFunc = $horarioFunc['h_entrada'];
+            $hSalidaFunc = $horarioFunc['h_salida'];
+        }
     }
-    $stmtSumas = $db->prepare($sqlSumas);
-    $stmtSumas->execute($params);
-    $sumas = $stmtSumas->fetch();
     
-    // Convertir segundos a horas:minutos:segundos
-    $totalSegundosHoras = (int)($sumas['total_segundos_horas'] ?? 0);
-    $totalSegundosTardanzas = (int)($sumas['total_segundos_tardanzas'] ?? 0);
+    // Calcular horas contabilizadas para cada marcación
+    foreach ($marcaciones as &$marcacion) {
+        if (!empty($marcacion['hora_entrada']) && !empty($marcacion['hora_salida'])) {
+            // Obtener horario del funcionario si no está filtrado por cédula
+            if (empty($cedulaFiltro) && !$exFuncionario) {
+                $stmtHorarioMarc = $db->prepare("SELECT h_entrada, h_salida FROM funcionarios WHERE cedula = ?");
+                $stmtHorarioMarc->execute([$marcacion['cedula']]);
+                $horarioMarc = $stmtHorarioMarc->fetch();
+                $hEntradaMarc = $horarioMarc ? ($horarioMarc['h_entrada'] ?? null) : null;
+                $hSalidaMarc = $horarioMarc ? ($horarioMarc['h_salida'] ?? null) : null;
+            } else {
+                $hEntradaMarc = $hEntradaFunc;
+                $hSalidaMarc = $hSalidaFunc;
+            }
+            
+            // Calcular horas contabilizadas
+            $resultado = calcularHorasTrabajadas($marcacion['hora_entrada'], $marcacion['hora_salida'], $hEntradaMarc, $hSalidaMarc);
+            if ($resultado) {
+                $marcacion['horas_contabilizadas'] = $resultado['horas_contabilizadas'];
+                $marcacion['tiempo_faltante_calc'] = $resultado['tiempo_faltante'];
+                
+                // Sumar minutos contabilizados
+                $partes = explode(':', $resultado['horas_contabilizadas']);
+                $horasCont = (int)($partes[0] ?? 0);
+                $minutosCont = (int)($partes[1] ?? 0);
+                $totalHorasContabilizadas += ($horasCont * 60) + $minutosCont;
+                
+                // Sumar minutos de tardanza
+                $partesTard = explode(':', $resultado['tiempo_faltante']);
+                $horasTard = (int)($partesTard[0] ?? 0);
+                $minutosTard = (int)($partesTard[1] ?? 0);
+                $totalTardanzasMinutos += ($horasTard * 60) + $minutosTard;
+            } else {
+                $marcacion['horas_contabilizadas'] = '00:00:00';
+                $marcacion['tiempo_faltante_calc'] = '00:00:00';
+            }
+        } else {
+            $marcacion['horas_contabilizadas'] = '00:00:00';
+            $marcacion['tiempo_faltante_calc'] = '00:00:00';
+        }
+    }
+    unset($marcacion); // Liberar referencia
     
-    // Calcular horas, minutos y segundos
-    $horasHoras = floor($totalSegundosHoras / 3600);
-    $minutosHoras = floor(($totalSegundosHoras % 3600) / 60);
-    $totalHorasTrabajadas = sprintf('%02d:%02d:00', $horasHoras, $minutosHoras);
+    // Convertir minutos totales a formato HH:MM
+    $horasTotal = floor($totalHorasContabilizadas / 60);
+    $minutosTotal = $totalHorasContabilizadas % 60;
+    $totalHorasTrabajadas = sprintf('%02d:%02d:00', $horasTotal, $minutosTotal);
     
-    $horasTardanzas = floor($totalSegundosTardanzas / 3600);
-    $minutosTardanzas = floor(($totalSegundosTardanzas % 3600) / 60);
-    $totalTardanzas = sprintf('%02d:%02d:00', $horasTardanzas, $minutosTardanzas);
+    $horasTardTotal = floor($totalTardanzasMinutos / 60);
+    $minutosTardTotal = $totalTardanzasMinutos % 60;
+    $totalTardanzas = sprintf('%02d:%02d:00', $horasTardTotal, $minutosTardTotal);
     
-    // Obtener nombre del funcionario si hay filtro por cédula
+    // Obtener nombre del funcionario y horario si hay filtro por cédula
     $nombreFuncionario = '';
+    $nombreCompleto = '';
+    $hEntrada = null;
+    $hSalida = null;
     if (!empty($cedulaFiltro)) {
-        $stmtFunc = $db->prepare("SELECT nombre, apellido FROM $tablaFuncionarios WHERE cedula = ?");
+        // Para funcionarios activos, obtener de tabla funcionarios (incluye h_entrada y h_salida)
+        // Para ex-funcionarios, solo obtener nombre y apellido
+        if (!$exFuncionario) {
+            $stmtFunc = $db->prepare("SELECT nombre, apellido, h_entrada, h_salida FROM funcionarios WHERE cedula = ?");
+        } else {
+            $stmtFunc = $db->prepare("SELECT nombre, apellido FROM ex_funcionarios WHERE cedula = ?");
+        }
         $stmtFunc->execute([$cedulaFiltro]);
         $funcionario = $stmtFunc->fetch();
         if ($funcionario) {
+            $nombreCompleto = trim(($funcionario['nombre'] ?? '') . ' ' . ($funcionario['apellido'] ?? ''));
             $prefijo = $exFuncionario ? ' (Ex-Funcionario)' : '';
-            $nombreFuncionario = trim(($funcionario['nombre'] ?? '') . ' ' . ($funcionario['apellido'] ?? '') . ' - ' . $cedulaFiltro . $prefijo);
+            $nombreFuncionario = $nombreCompleto . ' - ' . $cedulaFiltro . $prefijo;
+            
+            // Obtener horarios solo para funcionarios activos
+            if (!$exFuncionario) {
+                $hEntrada = $funcionario['h_entrada'] ?? null;
+                $hSalida = $funcionario['h_salida'] ?? null;
+                // Si no tiene horario, usar valores por defecto
+                if ($hEntrada === null) $hEntrada = '08:00:00';
+                if ($hSalida === null) $hSalida = '16:00:00';
+            }
         }
     }
     
@@ -208,16 +271,50 @@ try {
     $totalHorasTrabajadas = '00:00:00';
     $totalTardanzas = '00:00:00';
     $nombreFuncionario = '';
+    $nombreCompleto = '';
+    $hEntrada = '08:00:00';
+    $hSalida = '16:00:00';
 }
 
 include __DIR__ . '/../../includes/header.php';
 ?>
 
 <div class="page-header">
-    <h2>Marcaciones Biométricas<?php echo !empty($nombreFuncionario) ? ' - ' . htmlspecialchars($nombreFuncionario) : ''; ?></h2>
-    <a href="<?php echo BASE_URL; ?>/pages/index.php" class="btn">Volver al Inicio</a>
-    <?php if (!empty($cedulaFiltro)): ?>
-        <a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php<?php echo $exFuncionario ? '?ex_funcionario=1' : ''; ?>" class="btn btn-secondary">Ver Todas las Marcaciones</a>
+    <h2>Marcaciones Biométricas<?php echo !empty($nombreFuncionario) ? ' - ' . htmlspecialchars($nombreCompleto) . ' - ' . htmlspecialchars($cedulaFiltro) : ''; ?></h2>
+    <?php if (!empty($cedulaFiltro) && !$exFuncionario): 
+        // Convertir horas a formato 12 horas para visualización
+        $hEntradaFormato = $hEntrada ? date('g:i', strtotime($hEntrada)) : '08:00';
+        $hEntradaAMPM = $hEntrada ? (date('H', strtotime($hEntrada)) < 12 ? 'a.m.' : 'p.m.') : 'a.m.';
+        $hSalidaFormato = $hSalida ? date('g:i', strtotime($hSalida)) : '04:00';
+        $hSalidaAMPM = $hSalida ? (date('H', strtotime($hSalida)) < 12 ? 'a.m.' : 'p.m.') : 'p.m.';
+    ?>
+    <div class="horario-container" style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 5px;">
+        <form id="form-horario" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span style="font-weight: 500;">Horario de:</span>
+            <input type="time" 
+                   id="h_entrada" 
+                   name="h_entrada" 
+                   value="<?php echo $hEntrada ? date('H:i', strtotime($hEntrada)) : '08:00'; ?>" 
+                   style="padding: 0.4rem; border: 1px solid #ddd; border-radius: 3px; width: 100px;"
+                   required>
+            <span id="h_entrada_display"><?php echo htmlspecialchars($hEntradaFormato . ' ' . $hEntradaAMPM); ?></span>
+            <span>hasta</span>
+            <input type="time" 
+                   id="h_salida" 
+                   name="h_salida" 
+                   value="<?php echo $hSalida ? date('H:i', strtotime($hSalida)) : '16:00'; ?>" 
+                   style="padding: 0.4rem; border: 1px solid #ddd; border-radius: 3px; width: 100px;"
+                   required>
+            <span id="h_salida_display"><?php echo htmlspecialchars($hSalidaFormato . ' ' . $hSalidaAMPM); ?></span>
+            <button type="button" 
+                    id="btn-guardar-horario" 
+                    class="btn btn-primary" 
+                    style="margin-left: 0.5rem;">
+                Guardar
+            </button>
+            <span id="mensaje-horario" style="margin-left: 0.5rem; color: #28a745; font-weight: bold; display: none;"></span>
+        </form>
+    </div>
     <?php endif; ?>
 </div>
 
@@ -314,6 +411,9 @@ include __DIR__ . '/../../includes/header.php';
                         Horas Trabajadas
                     </th>
                     <th style="padding: 0.5rem 0.75rem; text-align: left; border: 1px solid #dee2e6;">
+                        Horas Dia.
+                    </th>
+                    <th style="padding: 0.5rem 0.75rem; text-align: left; border: 1px solid #dee2e6;">
                         Tardanza/Irregular
                     </th>
                     <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
@@ -380,30 +480,66 @@ include __DIR__ . '/../../includes/header.php';
                             ?>
                         </td>
                         <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php 
-                            // Fondo rojo solo si hay tiempo faltante (no completó las 8 horas)
-                            if ($marcacion['tiempo_faltante'] && $marcacion['tiempo_faltante'] !== '00:00:00') {
+                            // Fondo rojo solo si hay tiempo faltante calculado
+                            if (isset($marcacion['tiempo_faltante_calc']) && $marcacion['tiempo_faltante_calc'] !== '00:00:00') {
                                 echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
                             }
                         ?>">
                             <?php 
-                            if ($marcacion['horas_trabajadas']) {
-                                $horas = new DateTime($marcacion['horas_trabajadas']);
-                                echo $horas->format('H:i');
+                            // Mostrar horas contabilizadas (para visualización)
+                            if (isset($marcacion['horas_contabilizadas']) && $marcacion['horas_contabilizadas'] !== '00:00:00') {
+                                $partes = explode(':', $marcacion['horas_contabilizadas']);
+                                echo sprintf('%d:%02d', (int)($partes[0] ?? 0), (int)($partes[1] ?? 0));
                             } else {
                                 echo '<span style="color: #dc3545;">-</span>';
                             }
                             ?>
                         </td>
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; background-color: #fff3cd; color: #856404; font-weight: bold;">
+                            <?php 
+                            // Calcular horas reales directamente desde hora_entrada y hora_salida del reloj biométrico (sin filtros)
+                            if (!empty($marcacion['hora_entrada']) && !empty($marcacion['hora_salida'])) {
+                                $entrada = DateTime::createFromFormat('H:i:s', $marcacion['hora_entrada']);
+                                if (!$entrada) {
+                                    $entrada = DateTime::createFromFormat('H:i', $marcacion['hora_entrada']);
+                                }
+                                
+                                $salida = DateTime::createFromFormat('H:i:s', $marcacion['hora_salida']);
+                                if (!$salida) {
+                                    $salida = DateTime::createFromFormat('H:i', $marcacion['hora_salida']);
+                                }
+                                
+                                if ($entrada && $salida) {
+                                    // Calcular diferencia directa en minutos (sin filtros)
+                                    $minutosEntrada = $entrada->format('H') * 60 + $entrada->format('i');
+                                    $minutosSalida = $salida->format('H') * 60 + $salida->format('i');
+                                    $minutosTrabajados = $minutosSalida - $minutosEntrada;
+                                    
+                                    if ($minutosTrabajados > 0) {
+                                        $horas = floor($minutosTrabajados / 60);
+                                        $minutos = $minutosTrabajados % 60;
+                                        echo sprintf('%d:%02d', $horas, $minutos);
+                                    } else {
+                                        echo '<span style="color: #856404;">-</span>';
+                                    }
+                                } else {
+                                    echo '<span style="color: #856404;">-</span>';
+                                }
+                            } else {
+                                echo '<span style="color: #856404;">-</span>';
+                            }
+                            ?>
+                        </td>
                         <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php 
-                            // Fondo rojo siempre que haya tiempo faltante
-                            if ($marcacion['tiempo_faltante'] && $marcacion['tiempo_faltante'] !== '00:00:00') {
+                            // Fondo rojo siempre que haya tiempo faltante calculado
+                            if (isset($marcacion['tiempo_faltante_calc']) && $marcacion['tiempo_faltante_calc'] !== '00:00:00') {
                                 echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
                             }
                         ?>">
                             <?php 
-                            if ($marcacion['tiempo_faltante'] && $marcacion['tiempo_faltante'] !== '00:00:00') {
-                                $faltante = new DateTime($marcacion['tiempo_faltante']);
-                                echo $faltante->format('H:i');
+                            if (isset($marcacion['tiempo_faltante_calc']) && $marcacion['tiempo_faltante_calc'] !== '00:00:00') {
+                                $partes = explode(':', $marcacion['tiempo_faltante_calc']);
+                                echo sprintf('%d:%02d', (int)($partes[0] ?? 0), (int)($partes[1] ?? 0));
                             } else {
                                 echo '00:00';
                             }
@@ -470,6 +606,104 @@ include __DIR__ . '/../../includes/header.php';
     <div class="alert alert-info" style="padding: 1rem; background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 5px; color: #0c5460;">
         <i class="fas fa-info-circle"></i> No se encontraron marcaciones<?php echo !empty($busqueda) || !empty($fechaDesde) || !empty($fechaHasta) ? ' que coincidan con los filtros' : ''; ?>.
     </div>
+<?php endif; ?>
+
+<?php if (!empty($cedulaFiltro) && !$exFuncionario): ?>
+<script>
+// Manejar guardado de horario
+document.addEventListener('DOMContentLoaded', function() {
+    const btnGuardar = document.getElementById('btn-guardar-horario');
+    const hEntrada = document.getElementById('h_entrada');
+    const hSalida = document.getElementById('h_salida');
+    const hEntradaDisplay = document.getElementById('h_entrada_display');
+    const hSalidaDisplay = document.getElementById('h_salida_display');
+    const mensajeHorario = document.getElementById('mensaje-horario');
+    
+    // Función para convertir hora 24h a formato 12h con a.m./p.m.
+    function formatearHora12(hora24) {
+        const [horas, minutos] = hora24.split(':');
+        const h = parseInt(horas);
+        const m = minutos;
+        const ampm = h < 12 ? 'a.m.' : 'p.m.';
+        const h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+        return h12 + ':' + m + ' ' + ampm;
+    }
+    
+    // Actualizar display cuando cambian los campos de tiempo
+    if (hEntrada && hEntradaDisplay) {
+        hEntrada.addEventListener('change', function() {
+            hEntradaDisplay.textContent = formatearHora12(this.value);
+        });
+    }
+    
+    if (hSalida && hSalidaDisplay) {
+        hSalida.addEventListener('change', function() {
+            hSalidaDisplay.textContent = formatearHora12(this.value);
+        });
+    }
+    
+    if (btnGuardar) {
+        btnGuardar.addEventListener('click', function() {
+            const entrada = hEntrada.value;
+            const salida = hSalida.value;
+            const cedula = '<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>';
+            
+            // Validar que las horas sean válidas
+            if (!entrada || !salida) {
+                alert('Por favor, complete ambos campos de horario');
+                return;
+            }
+            
+            // Validar que la salida sea después de la entrada
+            if (entrada >= salida) {
+                alert('La hora de salida debe ser posterior a la hora de entrada');
+                return;
+            }
+            
+            // Deshabilitar botón mientras se procesa
+            btnGuardar.disabled = true;
+            btnGuardar.textContent = 'Guardando...';
+            mensajeHorario.style.display = 'none';
+            
+            // Hacer petición AJAX
+            fetch('<?php echo BASE_URL; ?>/pages/marcaciones/actualizar_horario.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    cedula: cedula,
+                    h_entrada: entrada + ':00',
+                    h_salida: salida + ':00'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mensajeHorario.textContent = 'Horario actualizado correctamente';
+                    mensajeHorario.style.display = 'inline';
+                    mensajeHorario.style.color = '#28a745';
+                    
+                    // Recargar la página después de 1 segundo para actualizar visualización
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    alert('Error: ' + (data.error || 'No se pudo actualizar el horario'));
+                    btnGuardar.disabled = false;
+                    btnGuardar.textContent = 'Guardar';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al comunicarse con el servidor');
+                btnGuardar.disabled = false;
+                btnGuardar.textContent = 'Guardar';
+            });
+        });
+    }
+});
+</script>
 <?php endif; ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

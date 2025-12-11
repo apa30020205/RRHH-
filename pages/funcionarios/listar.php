@@ -298,13 +298,6 @@ include __DIR__ . '/../../includes/header.php';
                             <i class="fas fa-stopwatch"></i>
                         </a>
                         <?php if (Auth::isAdmin()): ?>
-                        <button type="button" 
-                                class="btn-especial-icon <?php echo ($func['fun_horario_especial'] ?? 0) ? 'marcado' : ''; ?>" 
-                                data-cedula="<?php echo htmlspecialchars($func['cedula']); ?>"
-                                data-especial="<?php echo ($func['fun_horario_especial'] ?? 0); ?>"
-                                title="Funcionario Especial (Agentes de Seguridad, Choferes, etc.)">
-                            E
-                        </button>
                         <a href="<?php echo BASE_URL; ?>/pages/funcionarios/editar.php?cedula=<?php echo urlencode($func['cedula']); ?>" 
                            class="btn btn-success btn-action-icon" 
                            title="Editar">
@@ -516,52 +509,6 @@ include __DIR__ . '/../../includes/header.php';
             box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.5) !important;
         }
         
-        /* Botón Funcionario Especial */
-        .btn-especial-icon {
-            width: 32px;
-            height: 32px;
-            padding: 0;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 4px;
-            border: 2px solid #6c757d;
-            background-color: #e9ecef;
-            color: #6c757d;
-            font-weight: bold;
-            font-size: 1em;
-            cursor: pointer;
-            margin: 0;
-            transition: all 0.2s;
-            font-family: Arial, sans-serif;
-            flex-shrink: 0;
-            vertical-align: middle;
-        }
-        
-        .btn-especial-icon:hover {
-            background-color: #dee2e6;
-            border-color: #5a6268;
-            color: #5a6268;
-            transform: scale(1.05);
-        }
-        
-        /* Estado marcado - botón hundido */
-        .btn-especial-icon.marcado {
-            background-color: #28a745;
-            border-color: #1e7e34;
-            color: white;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
-            transform: none; /* Remover translateY para mantener alineación */
-        }
-        
-        .btn-especial-icon.marcado:hover {
-            background-color: #218838;
-            border-color: #1c7430;
-            color: white;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
-            transform: scale(1.05); /* Mantener scale en hover */
-        }
-        
         /* Estilos para dropdown fun_extra */
         .select-fun-extra {
             height: 32px;
@@ -587,60 +534,7 @@ include __DIR__ . '/../../includes/header.php';
     </style>
     
     <script>
-    // Manejar clic en botón de funcionario especial
-    document.addEventListener('DOMContentLoaded', function() {
-        const botonesEspeciales = document.querySelectorAll('.btn-especial-icon');
-        
-        botonesEspeciales.forEach(function(boton) {
-            boton.addEventListener('click', function() {
-                const cedula = this.getAttribute('data-cedula');
-                const estadoActual = parseInt(this.getAttribute('data-especial'));
-                const nuevoEstado = estadoActual === 1 ? 0 : 1;
-                
-                // Deshabilitar botón mientras se procesa
-                this.disabled = true;
-                this.style.opacity = '0.6';
-                
-                // Hacer petición AJAX
-                fetch('<?php echo BASE_URL; ?>/pages/funcionarios/toggle_especial.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        cedula: cedula,
-                        estado: nuevoEstado
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Actualizar estado visual
-                        if (nuevoEstado === 1) {
-                            this.classList.add('marcado');
-                            this.setAttribute('data-especial', '1');
-                        } else {
-                            this.classList.remove('marcado');
-                            this.setAttribute('data-especial', '0');
-                        }
-                    } else {
-                        alert('Error: ' + (data.error || 'No se pudo actualizar el estado'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error al comunicarse con el servidor');
-                })
-                .finally(() => {
-                    // Rehabilitar botón
-                    this.disabled = false;
-                    this.style.opacity = '1';
-                });
-                });
-            });
-        });
-        
-        // Función para actualizar fun_extra
+    // Función para actualizar fun_extra
         function actualizarFunExtra(cedula, valor) {
             try {
                 // Si el valor está vacío, enviar null para borrar

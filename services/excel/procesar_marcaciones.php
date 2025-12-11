@@ -19,6 +19,7 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/../../roles_rrhh/middleware/auth_middleware.php';
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/funciones_calculo_horas.php';
 require_once __DIR__ . '/../../classes/Database.php';
 require_once __DIR__ . '/../../roles_rrhh/classes/Auth.php';
 
@@ -283,12 +284,12 @@ try {
     foreach ($marcacionesAgrupadas as $cedula => $fechas) {
         foreach ($fechas as $fecha => $marcacion) {
             try {
-                // Obtener información del funcionario para verificar si es especial
-                $stmtFuncionario = $db->prepare("SELECT fun_horario_especial FROM funcionarios WHERE cedula = ?");
+                // Obtener información del funcionario para obtener horario personalizado
+                $stmtFuncionario = $db->prepare("SELECT h_entrada, h_salida FROM funcionarios WHERE cedula = ?");
                 $stmtFuncionario->execute([$cedula]);
                 $funcionario = $stmtFuncionario->fetch();
-                // Tratar NULL como 0 (no especial) - por defecto todos son normales
-                $esEspecial = isset($funcionario['fun_horario_especial']) && intval($funcionario['fun_horario_especial']) === 1;
+                $hEntradaFunc = $funcionario['h_entrada'] ?? null;
+                $hSalidaFunc = $funcionario['h_salida'] ?? null;
                 
                 // Primera entrada (más temprana)
                 $horaEntradaFinal = null;
@@ -304,49 +305,20 @@ try {
                     $horaSalidaFinal = $marcacion['salidas'][count($marcacion['salidas']) - 1]; // Última (más tardía)
                 }
                 
-                // Calcular horas trabajadas y tiempo faltante
+                // Calcular horas trabajadas y tiempo faltante usando la función
                 $horasTrabajadas = null;
                 $tiempoFaltante = null;
                 
                 if ($horaEntradaFinal && $horaSalidaFinal) {
-                    // Convertir horas a objetos DateTime para cálculo
-                    $entrada = DateTime::createFromFormat('H:i:s', $horaEntradaFinal);
-                    if (!$entrada) {
-                        $entrada = DateTime::createFromFormat('H:i', $horaEntradaFinal);
+                    // Usar la función calcularHorasTrabajadas con el horario del funcionario
+                    $resultado = calcularHorasTrabajadas($horaEntradaFinal, $horaSalidaFinal, $hEntradaFunc, $hSalidaFunc);
+                    
+                    if ($resultado) {
+                        // Guardar las horas reales en BD (horas_trabajadas)
+                        $horasTrabajadas = $resultado['horas_trabajadas'];
+                        $tiempoFaltante = $resultado['tiempo_faltante'];
                     }
-                    
-                    $salida = DateTime::createFromFormat('H:i:s', $horaSalidaFinal);
-                    if (!$salida) {
-                        $salida = DateTime::createFromFormat('H:i', $horaSalidaFinal);
-                    }
-                    
-                    // Si NO es funcionario especial y llega antes de las 8:00, usar 8:00 como hora de entrada
-                    $horaLimiteEntrada = DateTime::createFromFormat('H:i:s', '08:00:00');
-                    if (!$esEspecial && $entrada < $horaLimiteEntrada) {
-                        $entrada = clone $horaLimiteEntrada;
-                    }
-                    
-                    // Si la salida es después de las 4:00 PM, usar 4:00 PM como límite
-                    $horaLimiteSalida = DateTime::createFromFormat('H:i:s', '16:00:00');
-                    if ($salida > $horaLimiteSalida) {
-                        $salida = clone $horaLimiteSalida;
-                    }
-                    
-                    // Calcular diferencia en minutos
-                    $minutosEntrada = $entrada->format('H') * 60 + $entrada->format('i');
-                    $minutosSalida = $salida->format('H') * 60 + $salida->format('i');
-                    $minutosTrabajados = $minutosSalida - $minutosEntrada;
-                    
-                    // Convertir minutos a horas:minutos
-                    $horas = floor($minutosTrabajados / 60);
-                    $minutos = $minutosTrabajados % 60;
-                    $horasTrabajadas = sprintf('%02d:%02d:00', $horas, $minutos);
-                    
-                    // Calcular tiempo faltante (8 horas = 480 minutos)
-                    $minutosRequeridos = 480; // 8 horas * 60 minutos
-                    $tiempoFaltante = '00:00:00';
-                    
-                    if ($minutosTrabajados < $minutosRequeridos) {
+                }
                         // Si sale antes de las 4:00 PM, la tardanza es desde la hora de salida hasta las 4:00 PM
                         $salidaOriginal = DateTime::createFromFormat('H:i:s', $horaSalidaFinal);
                         if (!$salidaOriginal) {
