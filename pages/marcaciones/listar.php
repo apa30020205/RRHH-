@@ -328,7 +328,7 @@ try {
 include __DIR__ . '/../../includes/header.php';
 ?>
 
-<div class="page-header" style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+<div class="page-header" style="display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
     <h2 style="margin: 0; flex-shrink: 0;">Marcaciones Biométricas<?php echo !empty($nombreFuncionario) ? ' - ' . htmlspecialchars($nombreCompleto) . ' - ' . htmlspecialchars($cedulaFiltro) : ''; ?></h2>
     <?php if (!empty($cedulaFiltro) && !$exFuncionario): 
         // Convertir horas a formato 12 horas para visualización
@@ -337,7 +337,7 @@ include __DIR__ . '/../../includes/header.php';
         $hSalidaFormato = $hSalida ? date('g:i', strtotime($hSalida)) : '04:00';
         $hSalidaAMPM = $hSalida ? (date('H', strtotime($hSalida)) < 12 ? 'a.m.' : 'p.m.') : 'p.m.';
     ?>
-    <form id="form-horario" style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; flex: 1; min-width: 0;">
+    <form id="form-horario" style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: nowrap; margin-left: auto;">
         <span style="font-weight: bold; font-size: 1.05em;">Horario de:</span>
         <input type="time" 
                id="h_entrada" 
@@ -360,57 +360,58 @@ include __DIR__ . '/../../includes/header.php';
         </button>
         <span id="mensaje-horario" style="margin-left: 0.6rem; color: #28a745; font-weight: bold; font-size: 1.05em; display: none;"></span>
     </form>
-    
-    <!-- Panel de botones fun_extra -->
-    <?php if (Auth::isAdmin()): ?>
-    <div class="panel-fun-extra" style="margin-top: 1rem; display: flex; justify-content: flex-end; width: 100%;">
-        <div class="botones-fun-extra" style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
-            <!-- Primera fila: VIP, Manual, Cesante -->
-            <div style="display: flex; gap: 0.5rem;">
-                <button type="button" 
-                        class="btn-fun-extra <?php echo $funExtraActual === 'VIP' ? 'activo' : ''; ?>" 
-                        data-valor="VIP"
-                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
-                    VIP
-                </button>
-                <button type="button" 
-                        class="btn-fun-extra <?php echo $funExtraActual === 'Manual' ? 'activo' : ''; ?>" 
-                        data-valor="Manual"
-                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
-                    Manual
-                </button>
-                <button type="button" 
-                        class="btn-fun-extra <?php echo $funExtraActual === 'Cesante' ? 'activo' : ''; ?>" 
-                        data-valor="Cesante"
-                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
-                    Cesante
-                </button>
-            </div>
-            <!-- Segunda fila: Préstamo, Lic. Sueldo, Lic. Sin Sueldo -->
-            <div style="display: flex; gap: 0.5rem;">
-                <button type="button" 
-                        class="btn-fun-extra <?php echo $funExtraActual === 'Préstamo' ? 'activo' : ''; ?>" 
-                        data-valor="Préstamo"
-                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
-                    Préstamo
-                </button>
-                <button type="button" 
-                        class="btn-fun-extra <?php echo $funExtraActual === 'Lic. Sueldo' ? 'activo' : ''; ?>" 
-                        data-valor="Lic. Sueldo"
-                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
-                    Lic. Sueldo
-                </button>
-                <button type="button" 
-                        class="btn-fun-extra <?php echo $funExtraActual === 'Lic. Sin Sueldo' ? 'activo' : ''; ?>" 
-                        data-valor="Lic. Sin Sueldo"
-                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
-                    Lic. Sin Sueldo
-                </button>
-            </div>
+    <?php endif; ?>
+</div>
+
+<!-- Panel de botones fun_extra (fuera del page-header, alineado a la derecha) -->
+<?php if (!empty($cedulaFiltro) && !$exFuncionario && Auth::isAdmin()): ?>
+<div class="panel-fun-extra" style="display: flex; justify-content: flex-end; width: 100%; margin-bottom: 1rem;">
+    <div class="botones-fun-extra" style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
+        <!-- Primera fila: VIP, Manual, Cesante -->
+        <div style="display: flex; gap: 0.5rem;">
+            <button type="button" 
+                    class="btn-fun-extra <?php echo $funExtraActual === 'VIP' ? 'activo' : ''; ?>" 
+                    data-valor="VIP"
+                    data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                VIP
+            </button>
+            <button type="button" 
+                    class="btn-fun-extra <?php echo $funExtraActual === 'Manual' ? 'activo' : ''; ?>" 
+                    data-valor="Manual"
+                    data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                Manual
+            </button>
+            <button type="button" 
+                    class="btn-fun-extra <?php echo $funExtraActual === 'Cesante' ? 'activo' : ''; ?>" 
+                    data-valor="Cesante"
+                    data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                Cesante
+            </button>
+        </div>
+        <!-- Segunda fila: Préstamo, Lic. Sueldo, Lic. Sin Sueldo -->
+        <div style="display: flex; gap: 0.5rem;">
+            <button type="button" 
+                    class="btn-fun-extra <?php echo $funExtraActual === 'Préstamo' ? 'activo' : ''; ?>" 
+                    data-valor="Préstamo"
+                    data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                Préstamo
+            </button>
+            <button type="button" 
+                    class="btn-fun-extra <?php echo $funExtraActual === 'Lic. Sueldo' ? 'activo' : ''; ?>" 
+                    data-valor="Lic. Sueldo"
+                    data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                Lic. Sueldo
+            </button>
+            <button type="button" 
+                    class="btn-fun-extra <?php echo $funExtraActual === 'Lic. Sin Sueldo' ? 'activo' : ''; ?>" 
+                    data-valor="Lic. Sin Sueldo"
+                    data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                Lic. Sin Sueldo
+            </button>
         </div>
     </div>
-    <?php endif; ?>
-    <?php endif; ?>
+</div>
+<?php endif; ?>
     <?php if (empty($cedulaFiltro)): ?>
     <div style="flex-shrink: 0;">
         <form method="GET" action="" style="display: flex; gap: 0.5rem; align-items: center;">
