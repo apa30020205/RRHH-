@@ -292,35 +292,23 @@ include __DIR__ . '/../../includes/header.php';
                     <td><?php echo htmlspecialchars($func['sede_provincia'] ?? '-'); ?></td>
                     <td><?php echo htmlspecialchars($func['Direccion'] ?? '-'); ?></td>
                     <td style="white-space: nowrap; display: flex; align-items: center; gap: 4px;">
+                        <!-- Botón de Ver Marcaciones (siempre visible) -->
                         <a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php?cedula=<?php echo urlencode($func['cedula']); ?>" 
                            class="btn btn-info btn-action-icon" 
                            title="Ver Marcaciones">
                             <i class="fas fa-stopwatch"></i>
                         </a>
-                        <?php if (Auth::isAdmin()): ?>
-                        <a href="<?php echo BASE_URL; ?>/pages/funcionarios/editar.php?cedula=<?php echo urlencode($func['cedula']); ?>" 
-                           class="btn btn-success btn-action-icon" 
-                           title="Editar">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                        <a href="<?php echo BASE_URL; ?>/pages/funcionarios/eliminar.php?cedula=<?php echo urlencode($func['cedula']); ?>" 
-                           class="btn btn-danger btn-action-icon" 
-                           title="Eliminar"
-                           onclick="return confirm('¿Está seguro de eliminar este funcionario?')">
-                            <i class="fas fa-times"></i>
-                        </a>
-                        <select class="select-fun-extra" 
-                                data-cedula="<?php echo htmlspecialchars($func['cedula']); ?>"
-                                onchange="actualizarFunExtra('<?php echo htmlspecialchars($func['cedula']); ?>', this.value)">
-                            <option value="">---</option>
-                            <option value="Jefe" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'Jefe') ? 'selected' : ''; ?>>Jefe</option>
-                            <option value="Manual" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'Manual') ? 'selected' : ''; ?>>Manual</option>
-                            <option value="cesante" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'cesante') ? 'selected' : ''; ?>>cesante</option>
-                            <option value="Préstamo" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'Préstamo') ? 'selected' : ''; ?>>Préstamo</option>
-                            <option value="Lic. Sueldo" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'Lic. Sueldo') ? 'selected' : ''; ?>>Lic. Sueldo</option>
-                            <option value="Lic. Sin Sueldo" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'Lic. Sin Sueldo') ? 'selected' : ''; ?>>Lic. Sin Sueldo</option>
-                            <option value="otro" <?php echo (isset($func['fun_extra']) && $func['fun_extra'] === 'otro') ? 'selected' : ''; ?>>otro</option>
-                        </select>
+                        
+                        <!-- Botón verde de estado fun_extra (solo visual, no modificable) -->
+                        <?php 
+                        $funExtra = $func['fun_extra'] ?? null;
+                        // Solo mostrar si tiene estado Y no es Cesante
+                        if ($funExtra && $funExtra !== 'Cesante'): 
+                        ?>
+                            <span class="btn-fun-extra-estado" 
+                                  title="Estado actual del funcionario">
+                                <?php echo htmlspecialchars($funExtra); ?>
+                            </span>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -434,11 +422,11 @@ include __DIR__ . '/../../includes/header.php';
             width: 5%;
         }
         
-        /* Acciones - aumentar ancho para dropdown */
+        /* Acciones - ancho ajustado (solo Marcaciones + botón estado) */
         .table-excel thead th:last-child,
         .table-excel tbody td:last-child {
-            min-width: 220px;
-            width: 15%;
+            min-width: 120px;
+            width: 8%;
         }
         
         /* Contenedor de botones de acción - alinear verticalmente */
@@ -509,113 +497,23 @@ include __DIR__ . '/../../includes/header.php';
             box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.5) !important;
         }
         
-        /* Estilos para dropdown fun_extra */
-        .select-fun-extra {
-            height: 32px;
-            padding: 4px 6px;
-            font-size: 0.85em;
+        /* Botón verde de estado fun_extra en listado (solo visual) */
+        .btn-fun-extra-estado {
+            padding: 0.25rem 0.75rem;
+            background: #28a745;
+            color: white;
             border-radius: 4px;
-            width: 90px;
-            border: 1px solid #ccc;
-            background: white;
-            cursor: pointer;
-            transition: all 0.2s;
+            font-size: 0.85em;
+            font-weight: 500;
+            white-space: nowrap;
+            display: inline-block;
+            border: 1px solid #1e7e34;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+            cursor: default; /* No clickeable */
+            flex-shrink: 0;
         }
         
-        .select-fun-extra:hover {
-            border-color: #999;
-        }
-        
-        .select-fun-extra:focus {
-            outline: none;
-            border-color: #17a2b8;
-            box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
-        }
     </style>
-    
-    <script>
-    // Función para actualizar fun_extra
-        function actualizarFunExtra(cedula, valor) {
-            try {
-                // Si el valor está vacío, enviar null para borrar
-                const valorEnviar = (valor === '' || valor === null) ? null : valor;
-                
-                // Validar que el valor no exceda 20 caracteres
-                if (valorEnviar && valorEnviar.length > 20) {
-                    alert('Error: El valor no puede exceder 20 caracteres');
-                    return;
-                }
-                
-                // Obtener el select para deshabilitarlo durante la petición
-                const select = document.querySelector('.select-fun-extra[data-cedula="' + cedula + '"]');
-                if (select) {
-                    select.disabled = true;
-                    select.style.opacity = '0.6';
-                }
-                
-                // Hacer petición AJAX
-                fetch('<?php echo BASE_URL; ?>/pages/funcionarios/actualizar_fun_extra.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        cedula: cedula,
-                        fun_extra: valorEnviar
-                    })
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Error de red: ' + response.status);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        // Actualización exitosa - no mostrar mensaje
-                        console.log('fun_extra actualizado correctamente');
-                    } else {
-                        // Mostrar error
-                        alert('Error: ' + (data.message || 'No se pudo actualizar el campo'));
-                        // Revertir el valor del select
-                        if (select) {
-                            const valorAnterior = select.getAttribute('data-valor-anterior') || '';
-                            select.value = valorAnterior;
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error al comunicarse con el servidor: ' + error.message);
-                    // Revertir el valor del select
-                    if (select) {
-                        const valorAnterior = select.getAttribute('data-valor-anterior') || '';
-                        select.value = valorAnterior;
-                    }
-                })
-                .finally(() => {
-                    // Rehabilitar select
-                    if (select) {
-                        select.disabled = false;
-                        select.style.opacity = '1';
-                        // Guardar el nuevo valor como valor anterior
-                        select.setAttribute('data-valor-anterior', select.value);
-                    }
-                });
-            } catch (error) {
-                console.error('Error en actualizarFunExtra:', error);
-                alert('Error de codificación: ' + error.message);
-            }
-        }
-        
-        // Guardar valores iniciales de los selects al cargar la página
-        document.addEventListener('DOMContentLoaded', function() {
-            const selects = document.querySelectorAll('.select-fun-extra');
-            selects.forEach(function(select) {
-                select.setAttribute('data-valor-anterior', select.value);
-            });
-        });
-    </script>
 <?php endif; ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

@@ -55,11 +55,29 @@ if ($fun_extra === null || $fun_extra === '') {
     }
     
     // Validar que el valor sea uno de los permitidos
-    $valoresPermitidos = ['Jefe', 'Manual', 'cesante', 'Préstamo', 'Lic. Sueldo', 'Lic. Sin Sueldo', 'otro'];
-    if (!in_array($fun_extra, $valoresPermitidos)) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'Valor no permitido. Solo se permiten: Jefe, Manual, cesante, Préstamo, Lic. Sueldo, Lic. Sin Sueldo, otro']);
-        exit();
+    // Mapear valores antiguos a nuevos para compatibilidad
+    $mapeoValores = [
+        'Jefe' => 'VIP',
+        'cesante' => 'Cesante',
+        'otro' => null // Eliminar "otro"
+    ];
+    
+    // Si el valor está en el mapeo, convertirlo
+    if (isset($mapeoValores[$fun_extra])) {
+        $fun_extra = $mapeoValores[$fun_extra];
+    }
+    
+    // Si después del mapeo es null, está bien (se elimina)
+    if ($fun_extra === null) {
+        // Continuar con el proceso (se establecerá como null)
+    } else {
+        // Validar valores nuevos permitidos
+        $valoresPermitidos = ['VIP', 'Manual', 'Cesante', 'Préstamo', 'Lic. Sueldo', 'Lic. Sin Sueldo'];
+        if (!in_array($fun_extra, $valoresPermitidos)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Valor no permitido. Solo se permiten: VIP, Manual, Cesante, Préstamo, Lic. Sueldo, Lic. Sin Sueldo']);
+            exit();
+        }
     }
 }
 
@@ -77,8 +95,8 @@ try {
         exit();
     }
     
-    // Si se está marcando como "cesante", mover a ex_funcionarios y ex_marcaciones
-    if ($fun_extra === 'cesante') {
+    // Si se está marcando como "Cesante", mover a ex_funcionarios y ex_marcaciones
+    if ($fun_extra === 'Cesante') {
         // Iniciar transacción
         $db->beginTransaction();
         

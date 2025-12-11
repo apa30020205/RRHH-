@@ -85,7 +85,12 @@ try {
     $tablaFuncionarios = $exFuncionario ? 'ex_funcionarios' : 'funcionarios';
     
     // Construir consulta con JOIN a funcionarios/ex_funcionarios para obtener nombre y apellido
-    $sql = "SELECT m.*, f.nombre, f.apellido 
+    // Usar TIME_FORMAT para normalizar el formato de hora_entrada y hora_salida
+    $sql = "SELECT m.id_marcacion, m.cedula, m.fecha, 
+                   TIME_FORMAT(m.hora_entrada, '%H:%i:%s') as hora_entrada,
+                   TIME_FORMAT(m.hora_salida, '%H:%i:%s') as hora_salida,
+                   m.horas_trabajadas, m.tiempo_faltante, m.fecha_importacion,
+                   f.nombre, f.apellido 
             FROM $tablaMarcaciones m
             LEFT JOIN $tablaFuncionarios f ON m.cedula = f.cedula";
     $params = [];
@@ -115,8 +120,8 @@ try {
             "f.nombre LIKE ?",
             "f.apellido LIKE ?",
             "DATE_FORMAT(m.fecha, '%d/%m/%Y') LIKE ?",
-            "TIME_FORMAT(m.hora_entrada, '%H:%i') LIKE ?",
-            "TIME_FORMAT(m.hora_salida, '%H:%i') LIKE ?"
+            "TIME_FORMAT(m.hora_entrada, '%H:%i:%s') LIKE ?",
+            "TIME_FORMAT(m.hora_salida, '%H:%i:%s') LIKE ?"
         ];
         $condiciones[] = "(" . implode(" OR ", $condicionesBusqueda) . ")";
         // Agregar parámetros para cada campo de búsqueda
@@ -172,12 +177,19 @@ try {
     $hEntradaFunc = null;
     $hSalidaFunc = null;
     if (!empty($cedulaFiltro) && !$exFuncionario) {
-        $stmtHorario = $db->prepare("SELECT h_entrada, h_salida FROM funcionarios WHERE cedula = ?");
+        $stmtHorario = $db->prepare("SELECT TIME_FORMAT(h_entrada, '%H:%i:%s') as h_entrada, TIME_FORMAT(h_salida, '%H:%i:%s') as h_salida FROM funcionarios WHERE cedula = ?");
         $stmtHorario->execute([$cedulaFiltro]);
         $horarioFunc = $stmtHorario->fetch();
         if ($horarioFunc) {
             $hEntradaFunc = $horarioFunc['h_entrada'];
             $hSalidaFunc = $horarioFunc['h_salida'];
+            // Normalizar formato
+            if ($hEntradaFunc) {
+                $hEntradaFunc = trim($hEntradaFunc);
+                if (strlen($hEntradaFunc) == 5) {
+                    $hEntradaFunc .= ':00';
+                }
+            }
         }
     }
     
@@ -186,7 +198,7 @@ try {
         if (!empty($marcacion['hora_entrada']) && !empty($marcacion['hora_salida'])) {
             // Obtener horario del funcionario si no está filtrado por cédula
             if (empty($cedulaFiltro) && !$exFuncionario) {
-                $stmtHorarioMarc = $db->prepare("SELECT h_entrada, h_salida FROM funcionarios WHERE cedula = ?");
+                $stmtHorarioMarc = $db->prepare("SELECT TIME_FORMAT(h_entrada, '%H:%i:%s') as h_entrada, TIME_FORMAT(h_salida, '%H:%i:%s') as h_salida FROM funcionarios WHERE cedula = ?");
                 $stmtHorarioMarc->execute([$marcacion['cedula']]);
                 $horarioMarc = $stmtHorarioMarc->fetch();
                 $hEntradaMarc = $horarioMarc ? ($horarioMarc['h_entrada'] ?? null) : null;
@@ -195,6 +207,17 @@ try {
                 $hEntradaMarc = $hEntradaFunc;
                 $hSalidaMarc = $hSalidaFunc;
             }
+            
+            // Normalizar formato del horario (asegurar formato HH:MM:SS)
+            if ($hEntradaMarc) {
+                $hEntradaMarc = trim($hEntradaMarc);
+                if (strlen($hEntradaMarc) == 5) {
+                    $hEntradaMarc .= ':00';
+                }
+            }
+            
+            // Guardar horario de entrada en la marcación para usarlo después en la visualización
+            $marcacion['h_entrada_func'] = $hEntradaMarc;
             
             // Calcular horas contabilizadas
             $resultado = calcularHorasTrabajadas($marcacion['hora_entrada'], $marcacion['hora_salida'], $hEntradaMarc, $hSalidaMarc);
@@ -220,6 +243,24 @@ try {
         } else {
             $marcacion['horas_contabilizadas'] = '00:00:00';
             $marcacion['tiempo_faltante_calc'] = '00:00:00';
+            
+            // Obtener horario del funcionario aunque no haya hora_entrada/salida para usarlo en la visualización
+            if (empty($cedulaFiltro) && !$exFuncionario) {
+                $stmtHorarioMarc = $db->prepare("SELECT TIME_FORMAT(h_entrada, '%H:%i:%s') as h_entrada FROM funcionarios WHERE cedula = ?");
+                $stmtHorarioMarc->execute([$marcacion['cedula']]);
+                $horarioMarc = $stmtHorarioMarc->fetch();
+                $hEntradaMarc = $horarioMarc ? ($horarioMarc['h_entrada'] ?? null) : null;
+                // Normalizar formato
+                if ($hEntradaMarc) {
+                    $hEntradaMarc = trim($hEntradaMarc);
+                    if (strlen($hEntradaMarc) == 5) {
+                        $hEntradaMarc .= ':00';
+                    }
+                }
+            } else {
+                $hEntradaMarc = $hEntradaFunc;
+            }
+            $marcacion['h_entrada_func'] = $hEntradaMarc;
         }
     }
     unset($marcacion); // Liberar referencia
@@ -238,11 +279,12 @@ try {
     $nombreCompleto = '';
     $hEntrada = null;
     $hSalida = null;
+    $funExtraActual = null;
     if (!empty($cedulaFiltro)) {
         // Para funcionarios activos, obtener de tabla funcionarios (incluye h_entrada y h_salida)
         // Para ex-funcionarios, solo obtener nombre y apellido
         if (!$exFuncionario) {
-            $stmtFunc = $db->prepare("SELECT nombre, apellido, h_entrada, h_salida FROM funcionarios WHERE cedula = ?");
+            $stmtFunc = $db->prepare("SELECT nombre, apellido, h_entrada, h_salida, fun_extra FROM funcionarios WHERE cedula = ?");
         } else {
             $stmtFunc = $db->prepare("SELECT nombre, apellido FROM ex_funcionarios WHERE cedula = ?");
         }
@@ -260,6 +302,13 @@ try {
                 // Si no tiene horario, usar valores por defecto
                 if ($hEntrada === null) $hEntrada = '08:00:00';
                 if ($hSalida === null) $hSalida = '16:00:00';
+                
+                // Obtener fun_extra y mapear valores antiguos a nuevos
+                $funExtraActual = $funcionario['fun_extra'] ?? null;
+                $mapeoValores = ['Jefe' => 'VIP', 'cesante' => 'Cesante'];
+                if ($funExtraActual && isset($mapeoValores[$funExtraActual])) {
+                    $funExtraActual = $mapeoValores[$funExtraActual];
+                }
             }
         }
     }
@@ -311,6 +360,56 @@ include __DIR__ . '/../../includes/header.php';
         </button>
         <span id="mensaje-horario" style="margin-left: 0.6rem; color: #28a745; font-weight: bold; font-size: 1.05em; display: none;"></span>
     </form>
+    
+    <!-- Panel de botones fun_extra -->
+    <?php if (Auth::isAdmin()): ?>
+    <div class="panel-fun-extra" style="margin-top: 1rem; display: flex; justify-content: flex-end; width: 100%;">
+        <div class="botones-fun-extra" style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
+            <!-- Primera fila: VIP, Manual, Cesante -->
+            <div style="display: flex; gap: 0.5rem;">
+                <button type="button" 
+                        class="btn-fun-extra <?php echo $funExtraActual === 'VIP' ? 'activo' : ''; ?>" 
+                        data-valor="VIP"
+                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                    VIP
+                </button>
+                <button type="button" 
+                        class="btn-fun-extra <?php echo $funExtraActual === 'Manual' ? 'activo' : ''; ?>" 
+                        data-valor="Manual"
+                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                    Manual
+                </button>
+                <button type="button" 
+                        class="btn-fun-extra <?php echo $funExtraActual === 'Cesante' ? 'activo' : ''; ?>" 
+                        data-valor="Cesante"
+                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                    Cesante
+                </button>
+            </div>
+            <!-- Segunda fila: Préstamo, Lic. Sueldo, Lic. Sin Sueldo -->
+            <div style="display: flex; gap: 0.5rem;">
+                <button type="button" 
+                        class="btn-fun-extra <?php echo $funExtraActual === 'Préstamo' ? 'activo' : ''; ?>" 
+                        data-valor="Préstamo"
+                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                    Préstamo
+                </button>
+                <button type="button" 
+                        class="btn-fun-extra <?php echo $funExtraActual === 'Lic. Sueldo' ? 'activo' : ''; ?>" 
+                        data-valor="Lic. Sueldo"
+                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                    Lic. Sueldo
+                </button>
+                <button type="button" 
+                        class="btn-fun-extra <?php echo $funExtraActual === 'Lic. Sin Sueldo' ? 'activo' : ''; ?>" 
+                        data-valor="Lic. Sin Sueldo"
+                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                    Lic. Sin Sueldo
+                </button>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
     <?php endif; ?>
     <?php if (empty($cedulaFiltro)): ?>
     <div style="flex-shrink: 0;">
@@ -456,10 +555,65 @@ include __DIR__ . '/../../includes/header.php';
                         </td>
                         <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php 
                             if ($marcacion['hora_entrada']) {
-                                $hora = new DateTime($marcacion['hora_entrada']);
-                                $horaLimite = new DateTime('08:00:00');
-                                if ($hora > $horaLimite) {
-                                    echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
+                                // Usar el horario del funcionario ya obtenido en el bucle anterior
+                                $horaLimiteFunc = $marcacion['h_entrada_func'] ?? null;
+                                
+                                // Si hay horario del funcionario, comparar con él
+                                if ($horaLimiteFunc) {
+                                    // Limpiar y normalizar formatos de hora (eliminar espacios, asegurar formato H:i:s)
+                                    $horaEntrada = trim($marcacion['hora_entrada']);
+                                    $horaLimiteFunc = trim($horaLimiteFunc);
+                                    
+                                    // Normalizar formato: asegurar que tenga segundos
+                                    if (strlen($horaEntrada) == 5) {
+                                        $horaEntrada .= ':00'; // Agregar segundos si no los tiene
+                                    }
+                                    if (strlen($horaLimiteFunc) == 5) {
+                                        $horaLimiteFunc .= ':00'; // Agregar segundos si no los tiene
+                                    }
+                                    
+                                    // Convertir a segundos desde medianoche usando comparación directa
+                                    // Dividir en horas, minutos y segundos
+                                    $partesEntrada = explode(':', $horaEntrada);
+                                    $partesLimite = explode(':', $horaLimiteFunc);
+                                    
+                                    $hE = isset($partesEntrada[0]) ? (int)trim($partesEntrada[0]) : 0;
+                                    $mE = isset($partesEntrada[1]) ? (int)trim($partesEntrada[1]) : 0;
+                                    // IGNORAR segundos - solo comparar horas y minutos
+                                    
+                                    $hL = isset($partesLimite[0]) ? (int)trim($partesLimite[0]) : 0;
+                                    $mL = isset($partesLimite[1]) ? (int)trim($partesLimite[1]) : 0;
+                                    // IGNORAR segundos - solo comparar horas y minutos
+                                    
+                                    // Convertir a MINUTOS desde medianoche (ignorando segundos)
+                                    // Esto permite que cualquier segundo dentro del mismo minuto sea puntual
+                                    // Ejemplo: Si horario es 8:00, entonces 8:00:00, 8:00:10, 8:00:59 → PUNTUAL
+                                    $minutosEntrada = (int)($hE * 60 + $mE);
+                                    $minutosLimite = (int)($hL * 60 + $mL);
+                                    
+                                    // Solo es tarde si es DESPUÉS del minuto exacto
+                                    // Ejemplo: Si horario es 8:00, entonces:
+                                    // - 8:00:00, 8:00:10, 8:00:59 → PUNTUAL (mismo minuto)
+                                    // - 8:01:00 en adelante → TARDE (siguiente minuto)
+                                    if ($minutosEntrada > $minutosLimite) {
+                                        echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
+                                    }
+                                } else {
+                                    // Si no hay horario, usar 08:00:00 por defecto
+                                    $horaEntrada = trim($marcacion['hora_entrada']);
+                                    if (strlen($horaEntrada) == 5) {
+                                        $horaEntrada .= ':00';
+                                    }
+                                    $partesEntrada = explode(':', $horaEntrada);
+                                    $hE = isset($partesEntrada[0]) ? (int)trim($partesEntrada[0]) : 0;
+                                    $mE = isset($partesEntrada[1]) ? (int)trim($partesEntrada[1]) : 0;
+                                    // IGNORAR segundos - solo comparar horas y minutos
+                                    $minutosEntrada = (int)($hE * 60 + $mE);
+                                    $minutosLimite = 8 * 60 + 0; // 08:00 = 480 minutos
+                                    // Solo es tarde si es DESPUÉS del minuto 8:00 (8:01 en adelante)
+                                    if ($minutosEntrada > $minutosLimite) {
+                                        echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
+                                    }
                                 }
                             }
                         ?>">
@@ -620,6 +774,53 @@ include __DIR__ . '/../../includes/header.php';
 <?php endif; ?>
 
 <?php if (!empty($cedulaFiltro) && !$exFuncionario): ?>
+<style>
+.panel-fun-extra {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+}
+
+.botones-fun-extra {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-end;
+}
+
+.btn-fun-extra {
+    padding: 0.5rem 1rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: white;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.9em;
+    font-weight: 500;
+    min-width: 90px;
+}
+
+.btn-fun-extra:hover {
+    background: #f0f0f0;
+    border-color: #999;
+}
+
+.btn-fun-extra.activo {
+    background: #28a745;
+    color: white;
+    border-color: #1e7e34;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+    transform: translateY(1px);
+}
+
+.btn-fun-extra:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+</style>
+
 <script>
 // Manejar guardado de horario
 document.addEventListener('DOMContentLoaded', function() {
@@ -686,6 +887,98 @@ document.addEventListener('DOMContentLoaded', function() {
                 btnGuardar.disabled = false;
                 btnGuardar.textContent = 'Guardar';
             });
+        });
+    }
+    
+    // Manejar clicks en botones fun_extra
+    const botonesFunExtra = document.querySelectorAll('.btn-fun-extra');
+    botonesFunExtra.forEach(function(boton) {
+        boton.addEventListener('click', function() {
+            const cedula = this.getAttribute('data-cedula');
+            const valor = this.getAttribute('data-valor');
+            const estaActivo = this.classList.contains('activo');
+            
+            // Si ya está activo, desactivarlo (enviar null)
+            if (estaActivo) {
+                actualizarFunExtra(cedula, null, this);
+            } else {
+                // Si es Cesante, pedir confirmación
+                if (valor === 'Cesante') {
+                    const confirmar = confirm('Este funcionario ya no estará trabajando en la entidad. ¿Sí o No?');
+                    if (!confirmar) {
+                        // Si el usuario cancela, no hacer nada
+                        return;
+                    }
+                }
+                
+                // Desactivar todos los botones primero
+                botonesFunExtra.forEach(function(btn) {
+                    btn.classList.remove('activo');
+                });
+                
+                // Activar el botón seleccionado
+                this.classList.add('activo');
+                
+                // Enviar actualización
+                actualizarFunExtra(cedula, valor, this);
+            }
+        });
+    });
+    
+    function actualizarFunExtra(cedula, valor, boton) {
+        // Deshabilitar botón mientras se procesa
+        boton.disabled = true;
+        
+        // Hacer petición AJAX
+        fetch('<?php echo BASE_URL; ?>/pages/funcionarios/actualizar_fun_extra.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                cedula: cedula,
+                fun_extra: valor
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Si se marcó como Cesante, recargar la página (el funcionario ya no existe en funcionarios)
+                if (valor === 'Cesante') {
+                    alert('Funcionario movido a ex-funcionarios. La página se recargará.');
+                    window.location.reload();
+                }
+                // Si se desactivó (valor null), remover clase activo de todos
+                if (valor === null) {
+                    botonesFunExtra.forEach(function(btn) {
+                        btn.classList.remove('activo');
+                    });
+                }
+            } else {
+                // Revertir cambios visuales en caso de error
+                if (valor === null) {
+                    // Si se intentó desactivar, volver a activar
+                    boton.classList.add('activo');
+                } else {
+                    // Si se intentó activar, desactivar y reactivar el que estaba antes
+                    boton.classList.remove('activo');
+                }
+                alert('Error: ' + (data.message || 'No se pudo actualizar el campo'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            // Revertir cambios visuales
+            if (valor === null) {
+                boton.classList.add('activo');
+            } else {
+                boton.classList.remove('activo');
+            }
+            alert('Error al comunicarse con el servidor');
+        })
+        .finally(() => {
+            // Rehabilitar botón
+            boton.disabled = false;
         });
     }
 });
