@@ -166,3 +166,4 @@ En pantallas pequeñas, los botones se apilarán verticalmente:
 [Lic. Sueldo]
 [Lic. Sin Sueldo]
 ```
+
