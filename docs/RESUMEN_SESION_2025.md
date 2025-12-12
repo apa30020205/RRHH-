@@ -51,6 +51,7 @@
 - **v0.9.0.4**: Reorganización botones de importación
 - **v0.9.0.5**: Mejoras estéticas en iconos y espaciado
 - **v0.9.1**: Mover botones fun_extra al bloque gris de fechas, simplificar acciones en listado de funcionarios, alinear bloque de horario a la derecha
+- **v0.9.8.2**: Implementar detección automática de horario de almuerzo de 11 a 3 con 45 minutos de Almuerzo - Guardar todas las marcaciones en campo todas_marcaciones y calcular almuerzo al momento de mostrar
 
 ## Notas Técnicas
 
