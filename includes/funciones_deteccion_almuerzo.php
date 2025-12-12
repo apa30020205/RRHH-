@@ -4,6 +4,9 @@
  * Sistema RRHH
  * 
  * Detecta automáticamente el horario de almuerzo basado en las marcaciones del día
+ * Rango: 11:30 AM a 2:30 PM (14:30)
+ * Duración mínima: 30 minutos
+ * Duración máxima: 75 minutos
  */
 
 /**
@@ -51,11 +54,15 @@ function detectarHorarioAlmuerzo($horasRegistro) {
         return $a->getTimestamp() - $b->getTimestamp();
     });
     
-    // Filtrar marcaciones entre 11:00 AM y 3:00 PM
+    // Filtrar marcaciones entre 11:30 AM y 2:30 PM (14:30)
     $horasAlmuerzo = [];
     foreach ($horasDateTime as $dt) {
         $hora = (int)$dt->format('H');
-        if ($hora >= 11 && $hora < 15) {
+        $minuto = (int)$dt->format('i');
+        $horaDecimal = $hora + ($minuto / 60.0);
+        
+        // Rango: 11:30 (11.5) a 14:30 (14.5)
+        if ($horaDecimal >= 11.5 && $horaDecimal <= 14.5) {
             $horasAlmuerzo[] = $dt;
         }
     }
@@ -64,7 +71,7 @@ function detectarHorarioAlmuerzo($horasRegistro) {
         return null; // Necesitamos al menos 2 marcaciones para detectar un intervalo
     }
     
-    // Buscar intervalos entre 45 y 75 minutos
+    // Buscar intervalos entre 30 y 75 minutos (almuerzo mínimo 30 minutos, máximo 75 minutos)
     $candidatos = [];
     for ($i = 0; $i < count($horasAlmuerzo) - 1; $i++) {
         $entrada = $horasAlmuerzo[$i];
@@ -74,8 +81,8 @@ function detectarHorarioAlmuerzo($horasRegistro) {
         $diff = $salida->getTimestamp() - $entrada->getTimestamp();
         $minutos = (int)($diff / 60);
         
-        // Si está entre 45 y 75 minutos, es un candidato
-        if ($minutos >= 45 && $minutos <= 75) {
+        // Si está entre 30 y 75 minutos, es un candidato
+        if ($minutos >= 30 && $minutos <= 75) {
             $candidatos[] = [
                 'entrada' => $entrada,
                 'salida' => $salida,
