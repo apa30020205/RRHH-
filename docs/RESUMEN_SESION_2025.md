@@ -50,6 +50,7 @@
 - **v0.9.0.2**: Corrección bug importación marcaciones
 - **v0.9.0.4**: Reorganización botones de importación
 - **v0.9.0.5**: Mejoras estéticas en iconos y espaciado
+- **v0.9.1**: Mover botones fun_extra al bloque gris de fechas, simplificar acciones en listado de funcionarios, alinear bloque de horario a la derecha
 
 ## Notas Técnicas
 
