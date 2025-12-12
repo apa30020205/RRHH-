@@ -363,55 +363,6 @@ include __DIR__ . '/../../includes/header.php';
     <?php endif; ?>
 </div>
 
-<!-- Panel de botones fun_extra (fuera del page-header, alineado a la derecha) -->
-<?php if (!empty($cedulaFiltro) && !$exFuncionario && Auth::isAdmin()): ?>
-<div class="panel-fun-extra" style="display: flex; justify-content: flex-end; width: 100%; margin-bottom: 1rem;">
-    <div class="botones-fun-extra" style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
-        <!-- Primera fila: VIP, Manual, Cesante -->
-        <div style="display: flex; gap: 0.5rem;">
-            <button type="button" 
-                    class="btn-fun-extra <?php echo $funExtraActual === 'VIP' ? 'activo' : ''; ?>" 
-                    data-valor="VIP"
-                    data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
-                VIP
-            </button>
-            <button type="button" 
-                    class="btn-fun-extra <?php echo $funExtraActual === 'Manual' ? 'activo' : ''; ?>" 
-                    data-valor="Manual"
-                    data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
-                Manual
-            </button>
-            <button type="button" 
-                    class="btn-fun-extra <?php echo $funExtraActual === 'Cesante' ? 'activo' : ''; ?>" 
-                    data-valor="Cesante"
-                    data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
-                Cesante
-            </button>
-        </div>
-        <!-- Segunda fila: Préstamo, Lic. Sueldo, Lic. Sin Sueldo -->
-        <div style="display: flex; gap: 0.5rem;">
-            <button type="button" 
-                    class="btn-fun-extra <?php echo $funExtraActual === 'Préstamo' ? 'activo' : ''; ?>" 
-                    data-valor="Préstamo"
-                    data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
-                Préstamo
-            </button>
-            <button type="button" 
-                    class="btn-fun-extra <?php echo $funExtraActual === 'Lic. Sueldo' ? 'activo' : ''; ?>" 
-                    data-valor="Lic. Sueldo"
-                    data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
-                Lic. Sueldo
-            </button>
-            <button type="button" 
-                    class="btn-fun-extra <?php echo $funExtraActual === 'Lic. Sin Sueldo' ? 'activo' : ''; ?>" 
-                    data-valor="Lic. Sin Sueldo"
-                    data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
-                Lic. Sin Sueldo
-            </button>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
     <?php if (empty($cedulaFiltro)): ?>
     <div style="flex-shrink: 0;">
         <form method="GET" action="" style="display: flex; gap: 0.5rem; align-items: center;">
@@ -433,37 +384,87 @@ include __DIR__ . '/../../includes/header.php';
 <!-- Formulario de filtros de fecha -->
 <?php if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)): ?>
 <form method="GET" action="" class="search-form" style="background: #f8f9fa; padding: 1rem; border-radius: 5px; margin-bottom: 1.5rem;">
-    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-        <?php if (!empty($cedulaFiltro)): ?>
-        <input type="hidden" name="cedula" value="<?php echo htmlspecialchars($cedulaFiltro); ?>">
-        <?php endif; ?>
-        <?php if ($exFuncionario): ?>
-        <input type="hidden" name="ex_funcionario" value="1">
-        <?php endif; ?>
-        <?php if (empty($cedulaFiltro)): ?>
-        <input type="hidden" name="buscar" value="<?php echo htmlspecialchars($busqueda); ?>">
-        <?php endif; ?>
-        <div style="min-width: 150px;">
-            <label style="display: block; font-size: 0.9em; margin-bottom: 0.25rem; color: #666;">Desde:</label>
-            <input type="date" name="fecha_desde" value="<?php echo htmlspecialchars($fechaDesde); ?>" 
-                   style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px;">
-        </div>
-        <div style="min-width: 150px;">
-            <label style="display: block; font-size: 0.9em; margin-bottom: 0.25rem; color: #666;">Hasta:</label>
-            <input type="date" name="fecha_hasta" value="<?php echo htmlspecialchars($fechaHasta); ?>" 
-                   style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px;">
-        </div>
-        <div>
-            <button type="submit" class="btn btn-primary">Buscar</button>
-            <?php if (!empty($busqueda) || !empty($fechaDesde) || !empty($fechaHasta)): ?>
-                <a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php<?php 
-                    $params = [];
-                    if (!empty($cedulaFiltro)) $params['cedula'] = $cedulaFiltro;
-                    if ($exFuncionario) $params['ex_funcionario'] = '1';
-                    echo !empty($params) ? '?' . http_build_query($params) : '';
-                ?>" class="btn btn-secondary" style="font-weight: bold; color: #17a2b8;">Limpiar</a>
+    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; justify-content: space-between;">
+        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+            <?php if (!empty($cedulaFiltro)): ?>
+            <input type="hidden" name="cedula" value="<?php echo htmlspecialchars($cedulaFiltro); ?>">
             <?php endif; ?>
+            <?php if ($exFuncionario): ?>
+            <input type="hidden" name="ex_funcionario" value="1">
+            <?php endif; ?>
+            <?php if (empty($cedulaFiltro)): ?>
+            <input type="hidden" name="buscar" value="<?php echo htmlspecialchars($busqueda); ?>">
+            <?php endif; ?>
+            <div style="min-width: 150px;">
+                <label style="display: block; font-size: 0.9em; margin-bottom: 0.25rem; color: #666;">Desde:</label>
+                <input type="date" name="fecha_desde" value="<?php echo htmlspecialchars($fechaDesde); ?>" 
+                       style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px;">
+            </div>
+            <div style="min-width: 150px;">
+                <label style="display: block; font-size: 0.9em; margin-bottom: 0.25rem; color: #666;">Hasta:</label>
+                <input type="date" name="fecha_hasta" value="<?php echo htmlspecialchars($fechaHasta); ?>" 
+                       style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px;">
+            </div>
+            <div>
+                <button type="submit" class="btn btn-primary">Buscar</button>
+                <?php if (!empty($busqueda) || !empty($fechaDesde) || !empty($fechaHasta)): ?>
+                    <a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php<?php 
+                        $params = [];
+                        if (!empty($cedulaFiltro)) $params['cedula'] = $cedulaFiltro;
+                        if ($exFuncionario) $params['ex_funcionario'] = '1';
+                        echo !empty($params) ? '?' . http_build_query($params) : '';
+                    ?>" class="btn btn-secondary" style="font-weight: bold; color: #17a2b8;">Limpiar</a>
+                <?php endif; ?>
+            </div>
         </div>
+        
+        <!-- Panel de botones fun_extra (dentro del bloque gris, alineado a la derecha) -->
+        <?php if (!empty($cedulaFiltro) && !$exFuncionario && Auth::isAdmin()): ?>
+        <div class="botones-fun-extra" style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
+            <!-- Primera fila: VIP, Manual, Cesante -->
+            <div style="display: flex; gap: 0.5rem;">
+                <button type="button" 
+                        class="btn-fun-extra <?php echo $funExtraActual === 'VIP' ? 'activo' : ''; ?>" 
+                        data-valor="VIP"
+                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                    VIP
+                </button>
+                <button type="button" 
+                        class="btn-fun-extra <?php echo $funExtraActual === 'Manual' ? 'activo' : ''; ?>" 
+                        data-valor="Manual"
+                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                    Manual
+                </button>
+                <button type="button" 
+                        class="btn-fun-extra <?php echo $funExtraActual === 'Cesante' ? 'activo' : ''; ?>" 
+                        data-valor="Cesante"
+                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                    Cesante
+                </button>
+            </div>
+            <!-- Segunda fila: Préstamo, Lic. Sueldo, Lic. Sin Sueldo -->
+            <div style="display: flex; gap: 0.5rem;">
+                <button type="button" 
+                        class="btn-fun-extra <?php echo $funExtraActual === 'Préstamo' ? 'activo' : ''; ?>" 
+                        data-valor="Préstamo"
+                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                    Préstamo
+                </button>
+                <button type="button" 
+                        class="btn-fun-extra <?php echo $funExtraActual === 'Lic. Sueldo' ? 'activo' : ''; ?>" 
+                        data-valor="Lic. Sueldo"
+                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                    Lic. Sueldo
+                </button>
+                <button type="button" 
+                        class="btn-fun-extra <?php echo $funExtraActual === 'Lic. Sin Sueldo' ? 'activo' : ''; ?>" 
+                        data-valor="Lic. Sin Sueldo"
+                        data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
+                    Lic. Sin Sueldo
+                </button>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 </form>
 <?php endif; ?>
