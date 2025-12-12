@@ -16,6 +16,11 @@
  */
 
 header('Content-Type: application/json');
+// Habilitar logging de errores para debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
 require_once __DIR__ . '/../../roles_rrhh/middleware/auth_middleware.php';
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -58,6 +63,25 @@ try {
 
     $db = Database::getInstance()->getConnection();
     
+    // Verificar que los campos de almuerzo existan en la tabla (si no existen, usar campos antiguos)
+    $camposAlmuerzoExisten = false;
+    try {
+        $stmtCheck = $db->query("SHOW COLUMNS FROM marcaciones LIKE 'almuerzo_entrada'");
+        $camposAlmuerzoExisten = $stmtCheck->rowCount() > 0;
+    } catch (PDOException $e) {
+        // Si hay error, asumir que no existen
+        $camposAlmuerzoExisten = false;
+    }
+    
+    // Verificar si existe el campo todas_marcaciones
+    $campoTodasMarcacionesExiste = false;
+    try {
+        $stmtCheck = $db->query("SHOW COLUMNS FROM marcaciones LIKE 'todas_marcaciones'");
+        $campoTodasMarcacionesExiste = $stmtCheck->rowCount() > 0;
+    } catch (PDOException $e) {
+        $campoTodasMarcacionesExiste = false;
+    }
+    
     $totalProcesados = 0;
     $marcacionesGuardadas = 0;
     $marcacionesActualizadas = 0;
@@ -80,18 +104,65 @@ try {
     $columnasDetectadas = isset($excelData['columns']) ? $excelData['columns'] : [];
     
     // Preparar statement para insertar/actualizar marcaciones
-    $stmtMarcacion = $db->prepare("
-        INSERT INTO marcaciones (cedula, fecha, hora_entrada, almuerzo_salida, almuerzo_entrada, hora_salida, horas_trabajadas, tiempo_faltante, fecha_importacion)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
-        ON DUPLICATE KEY UPDATE
-            hora_entrada = VALUES(hora_entrada),
-            almuerzo_salida = VALUES(almuerzo_salida),
-            almuerzo_entrada = VALUES(almuerzo_entrada),
-            hora_salida = VALUES(hora_salida),
-            horas_trabajadas = VALUES(horas_trabajadas),
-            tiempo_faltante = VALUES(tiempo_faltante),
-            fecha_importacion = NOW()
-    ");
+    // Si los campos de almuerzo no existen, usar la estructura antigua
+    if ($camposAlmuerzoExisten) {
+        if ($campoTodasMarcacionesExiste) {
+            // Incluir todas_marcaciones si existe
+            $stmtMarcacion = $db->prepare("
+                INSERT INTO marcaciones (cedula, fecha, hora_entrada, todas_marcaciones, almuerzo_salida, almuerzo_entrada, hora_salida, horas_trabajadas, tiempo_faltante, fecha_importacion)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                ON DUPLICATE KEY UPDATE
+                    hora_entrada = VALUES(hora_entrada),
+                    todas_marcaciones = VALUES(todas_marcaciones),
+                    almuerzo_salida = VALUES(almuerzo_salida),
+                    almuerzo_entrada = VALUES(almuerzo_entrada),
+                    hora_salida = VALUES(hora_salida),
+                    horas_trabajadas = VALUES(horas_trabajadas),
+                    tiempo_faltante = VALUES(tiempo_faltante),
+                    fecha_importacion = NOW()
+            ");
+        } else {
+            // Sin todas_marcaciones
+            $stmtMarcacion = $db->prepare("
+                INSERT INTO marcaciones (cedula, fecha, hora_entrada, almuerzo_salida, almuerzo_entrada, hora_salida, horas_trabajadas, tiempo_faltante, fecha_importacion)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                ON DUPLICATE KEY UPDATE
+                    hora_entrada = VALUES(hora_entrada),
+                    almuerzo_salida = VALUES(almuerzo_salida),
+                    almuerzo_entrada = VALUES(almuerzo_entrada),
+                    hora_salida = VALUES(hora_salida),
+                    horas_trabajadas = VALUES(horas_trabajadas),
+                    tiempo_faltante = VALUES(tiempo_faltante),
+                    fecha_importacion = NOW()
+            ");
+        }
+    } else {
+        // Estructura antigua sin campos de almuerzo
+        if ($campoTodasMarcacionesExiste) {
+            $stmtMarcacion = $db->prepare("
+                INSERT INTO marcaciones (cedula, fecha, hora_entrada, todas_marcaciones, hora_salida, horas_trabajadas, tiempo_faltante, fecha_importacion)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+                ON DUPLICATE KEY UPDATE
+                    hora_entrada = VALUES(hora_entrada),
+                    todas_marcaciones = VALUES(todas_marcaciones),
+                    hora_salida = VALUES(hora_salida),
+                    horas_trabajadas = VALUES(horas_trabajadas),
+                    tiempo_faltante = VALUES(tiempo_faltante),
+                    fecha_importacion = NOW()
+            ");
+        } else {
+            $stmtMarcacion = $db->prepare("
+                INSERT INTO marcaciones (cedula, fecha, hora_entrada, hora_salida, horas_trabajadas, tiempo_faltante, fecha_importacion)
+                VALUES (?, ?, ?, ?, ?, ?, NOW())
+                ON DUPLICATE KEY UPDATE
+                    hora_entrada = VALUES(hora_entrada),
+                    hora_salida = VALUES(hora_salida),
+                    horas_trabajadas = VALUES(horas_trabajadas),
+                    tiempo_faltante = VALUES(tiempo_faltante),
+                    fecha_importacion = NOW()
+            ");
+        }
+    }
     
     // Array para agrupar marcaciones por cedula + fecha
     // Estructura: $marcacionesAgrupadas[cedula][fecha] = ['entradas' => [], 'salidas' => []]
@@ -138,7 +209,8 @@ try {
             $horaRegistro = null; // Columna J
             
             // Si tenemos las columnas detectadas, usarlas para mapear
-            if (!empty($columnasDetectadas) && count($columnasDetectadas) >= 10) {
+            // Nota: La columna J puede no existir en algunos archivos, por lo que solo requerimos 9 columnas mínimo
+            if (!empty($columnasDetectadas) && count($columnasDetectadas) >= 9) {
                 // Buscar columnas por nombre o índice
                 $columnaA = $columnasDetectadas[0] ?? null; // ID de Usuario
                 $columnaF = $columnasDetectadas[5] ?? null; // Grabar fecha
@@ -297,19 +369,29 @@ try {
             }
             
             // Agregar hora de registro (Columna J) si existe
+            // La columna J puede contener múltiples horas separadas por coma, punto y coma, o salto de línea
             if (!empty($horaRegistro)) {
-                // Normalizar formato de hora (agregar segundos si faltan)
-                $horaNormalizada = trim($horaRegistro);
-                if (strlen($horaNormalizada) == 5) {
-                    $horaNormalizada .= ':00';
-                }
-                // Validar que sea una hora válida
-                $dt = DateTime::createFromFormat('H:i:s', $horaNormalizada);
-                if ($dt === false) {
-                    $dt = DateTime::createFromFormat('H:i', $horaNormalizada);
-                }
-                if ($dt !== false) {
-                    $marcacionesAgrupadas[$cedulaBD][$fechaFormateada]['horas_registro'][] = $dt->format('H:i:s');
+                // Separar múltiples horas si están en una celda
+                $horasSeparadas = preg_split('/[,;\n\r]+/', $horaRegistro);
+                
+                foreach ($horasSeparadas as $hora) {
+                    $hora = trim($hora);
+                    if (empty($hora)) continue;
+                    
+                    // Normalizar formato de hora (agregar segundos si faltan)
+                    $horaNormalizada = $hora;
+                    if (strlen($horaNormalizada) == 5) {
+                        $horaNormalizada .= ':00';
+                    }
+                    
+                    // Validar que sea una hora válida
+                    $dt = DateTime::createFromFormat('H:i:s', $horaNormalizada);
+                    if ($dt === false) {
+                        $dt = DateTime::createFromFormat('H:i', $horaNormalizada);
+                    }
+                    if ($dt !== false) {
+                        $marcacionesAgrupadas[$cedulaBD][$fechaFormateada]['horas_registro'][] = $dt->format('H:i:s');
+                    }
                 }
             }
             
@@ -346,16 +428,19 @@ try {
                     $horaSalidaFinal = $marcacion['salidas'][count($marcacion['salidas']) - 1]; // Última (más tardía)
                 }
                 
-                // Detectar horario de almuerzo usando las horas de registro (Columna J)
+                // Preparar todas las horas de registro como string separado por comas
+                $todasMarcacionesStr = null;
+                if (!empty($marcacion['horas_registro']) && is_array($marcacion['horas_registro'])) {
+                    // Eliminar duplicados y ordenar
+                    $horasUnicas = array_unique($marcacion['horas_registro']);
+                    sort($horasUnicas);
+                    $todasMarcacionesStr = implode(',', $horasUnicas);
+                }
+                
+                // Ya NO calculamos el almuerzo aquí, se calculará al momento de mostrar
+                // Dejamos almuerzo_salida y almuerzo_entrada como NULL para que se calcule en listar.php
                 $almuerzoEntrada = null;
                 $almuerzoSalida = null;
-                if (!empty($marcacion['horas_registro'])) {
-                    $resultadoAlmuerzo = detectarHorarioAlmuerzo($marcacion['horas_registro']);
-                    if ($resultadoAlmuerzo) {
-                        $almuerzoEntrada = $resultadoAlmuerzo['entrada'];
-                        $almuerzoSalida = $resultadoAlmuerzo['salida'];
-                    }
-                }
                 
                 // Calcular horas trabajadas y tiempo faltante usando la función
                 $horasTrabajadas = null;
@@ -371,41 +456,58 @@ try {
                         $tiempoFaltante = $resultado['tiempo_faltante'];
                     }
                 }
-                        // Si sale antes de las 4:00 PM, la tardanza es desde la hora de salida hasta las 4:00 PM
-                        $salidaOriginal = DateTime::createFromFormat('H:i:s', $horaSalidaFinal);
-                        if (!$salidaOriginal) {
-                            $salidaOriginal = DateTime::createFromFormat('H:i', $horaSalidaFinal);
-                        }
-                        $horaLimiteSalida = DateTime::createFromFormat('H:i:s', '16:00:00');
-                        
-                        if ($salidaOriginal && $salidaOriginal < $horaLimiteSalida) {
-                            // Tardanza = desde hora de salida hasta 4:00 PM
-                            $minutosSalidaOriginal = $salidaOriginal->format('H') * 60 + $salidaOriginal->format('i');
-                            $minutosHasta4PM = (16 * 60) - $minutosSalidaOriginal; // 960 minutos (4 PM) - minutos de salida
-                            $horasFaltantes = floor($minutosHasta4PM / 60);
-                            $minutosFaltantesRestantes = $minutosHasta4PM % 60;
-                            $tiempoFaltante = sprintf('%02d:%02d:00', $horasFaltantes, $minutosFaltantesRestantes);
-                        } else {
-                            // Si sale después de las 4:00 PM, tardanza = 8 horas - horas trabajadas
-                            $minutosFaltantes = $minutosRequeridos - $minutosTrabajados;
-                            $horasFaltantes = floor($minutosFaltantes / 60);
-                            $minutosFaltantesRestantes = $minutosFaltantes % 60;
-                            $tiempoFaltante = sprintf('%02d:%02d:00', $horasFaltantes, $minutosFaltantesRestantes);
-                        }
-                    }
-                }
                 
                 // Guardar o actualizar marcación
-                $stmtMarcacion->execute([
-                    $cedula,
-                    $fecha,  // Usar $fecha (clave del bucle) que ya está formateada, NO $fechaFormateada del scope anterior
-                    $horaEntradaFinal,
-                    $almuerzoSalida,  // almuerzo_salida
-                    $almuerzoEntrada, // almuerzo_entrada
-                    $horaSalidaFinal,
-                    $horasTrabajadas,
-                    $tiempoFaltante
-                ]);
+                if ($camposAlmuerzoExisten) {
+                    if ($campoTodasMarcacionesExiste) {
+                        // Con todas_marcaciones
+                        $stmtMarcacion->execute([
+                            $cedula,
+                            $fecha,
+                            $horaEntradaFinal,
+                            $todasMarcacionesStr,  // todas_marcaciones
+                            $almuerzoSalida,  // almuerzo_salida (NULL, se calculará al mostrar)
+                            $almuerzoEntrada, // almuerzo_entrada (NULL, se calculará al mostrar)
+                            $horaSalidaFinal,
+                            $horasTrabajadas,
+                            $tiempoFaltante
+                        ]);
+                    } else {
+                        // Sin todas_marcaciones
+                        $stmtMarcacion->execute([
+                            $cedula,
+                            $fecha,
+                            $horaEntradaFinal,
+                            $almuerzoSalida,  // almuerzo_salida
+                            $almuerzoEntrada, // almuerzo_entrada
+                            $horaSalidaFinal,
+                            $horasTrabajadas,
+                            $tiempoFaltante
+                        ]);
+                    }
+                } else {
+                    // Estructura antigua sin campos de almuerzo
+                    if ($campoTodasMarcacionesExiste) {
+                        $stmtMarcacion->execute([
+                            $cedula,
+                            $fecha,
+                            $horaEntradaFinal,
+                            $todasMarcacionesStr,  // todas_marcaciones
+                            $horaSalidaFinal,
+                            $horasTrabajadas,
+                            $tiempoFaltante
+                        ]);
+                    } else {
+                        $stmtMarcacion->execute([
+                            $cedula,
+                            $fecha,
+                            $horaEntradaFinal,
+                            $horaSalidaFinal,
+                            $horasTrabajadas,
+                            $tiempoFaltante
+                        ]);
+                    }
+                }
                 
                 // Verificar si fue insert o update
                 if ($stmtMarcacion->rowCount() > 0) {

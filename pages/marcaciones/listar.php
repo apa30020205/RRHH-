@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../roles_rrhh/middleware/auth_middleware.php';
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/funciones_calculo_horas.php';
+require_once __DIR__ . '/../../includes/funciones_deteccion_almuerzo.php';
 require_once __DIR__ . '/../../classes/Database.php';
 require_once __DIR__ . '/../../roles_rrhh/classes/Auth.php';
 
@@ -92,6 +93,7 @@ try {
                    TIME_FORMAT(m.almuerzo_entrada, '%H:%i:%s') as almuerzo_entrada,
                    TIME_FORMAT(m.hora_salida, '%H:%i:%s') as hora_salida,
                    m.horas_trabajadas, m.tiempo_faltante, m.fecha_importacion,
+                   m.todas_marcaciones,
                    f.nombre, f.apellido 
             FROM $tablaMarcaciones m
             LEFT JOIN $tablaFuncionarios f ON m.cedula = f.cedula";
@@ -196,6 +198,46 @@ try {
     }
     
     // Calcular horas contabilizadas para cada marcación
+    // Primero calcular almuerzo desde todas_marcaciones
+    foreach ($marcaciones as &$marcacion) {
+        // Calcular almuerzo desde todas_marcaciones si existe
+        $almuerzoSalida = null;
+        $almuerzoEntrada = null;
+        
+        if (!empty($marcacion['todas_marcaciones'])) {
+            // Parsear todas las marcaciones (separadas por comas)
+            $horasRegistro = explode(',', $marcacion['todas_marcaciones']);
+            $horasRegistro = array_map('trim', $horasRegistro);
+            $horasRegistro = array_filter($horasRegistro); // Eliminar vacíos
+            
+            if (!empty($horasRegistro)) {
+                try {
+                    $resultadoAlmuerzo = detectarHorarioAlmuerzo($horasRegistro);
+                    if ($resultadoAlmuerzo && is_array($resultadoAlmuerzo)) {
+                        // La función retorna: 'entrada' = primera hora (sale a almorzar), 'salida' = segunda hora (regresa)
+                        // En BD: almuerzo_salida = cuando sale, almuerzo_entrada = cuando regresa
+                        $almuerzoSalida = isset($resultadoAlmuerzo['entrada']) ? $resultadoAlmuerzo['entrada'] : null;
+                        $almuerzoEntrada = isset($resultadoAlmuerzo['salida']) ? $resultadoAlmuerzo['salida'] : null;
+                    }
+                } catch (Exception $e) {
+                    // Si hay error, usar valores de BD si existen
+                    $almuerzoSalida = $marcacion['almuerzo_salida'] ?? null;
+                    $almuerzoEntrada = $marcacion['almuerzo_entrada'] ?? null;
+                }
+            }
+        } else {
+            // Si no hay todas_marcaciones, usar valores de BD si existen
+            $almuerzoSalida = $marcacion['almuerzo_salida'] ?? null;
+            $almuerzoEntrada = $marcacion['almuerzo_entrada'] ?? null;
+        }
+        
+        // Actualizar los valores calculados en la marcación para mostrar
+        $marcacion['almuerzo_salida_calc'] = $almuerzoSalida;
+        $marcacion['almuerzo_entrada_calc'] = $almuerzoEntrada;
+    }
+    unset($marcacion); // Liberar referencia
+    
+    // Ahora calcular horas trabajadas
     foreach ($marcaciones as &$marcacion) {
         if (!empty($marcacion['hora_entrada']) && !empty($marcacion['hora_salida'])) {
             // Obtener horario del funcionario si no está filtrado por cédula
@@ -642,21 +684,22 @@ include __DIR__ . '/../../includes/header.php';
                         </td>
                         <!-- Columna Alm. Salida -->
                         <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php
-                            // Validación visual: fondo rojo si es NULL o si excede 1 hora
-                            $almuerzoSalida = $marcacion['almuerzo_salida'] ?? null;
-                            $almuerzoEntrada = $marcacion['almuerzo_entrada'] ?? null;
+                            // Usar valores calculados si existen, sino usar valores de BD
+                            $almuerzoSalida = $marcacion['almuerzo_salida_calc'] ?? $marcacion['almuerzo_salida'] ?? null;
+                            $almuerzoEntrada = $marcacion['almuerzo_entrada_calc'] ?? $marcacion['almuerzo_entrada'] ?? null;
                             $mostrarError = false;
                             
                             if (empty($almuerzoSalida) || empty($almuerzoEntrada)) {
                                 $mostrarError = true;
                             } else {
                                 // Calcular diferencia en minutos
-                                $entrada = DateTime::createFromFormat('H:i:s', $almuerzoEntrada);
+                                // almuerzo_salida = cuando sale (más temprano), almuerzo_entrada = cuando regresa (más tarde)
                                 $salida = DateTime::createFromFormat('H:i:s', $almuerzoSalida);
+                                $entrada = DateTime::createFromFormat('H:i:s', $almuerzoEntrada);
                                 if ($entrada && $salida) {
-                                    $diff = $salida->getTimestamp() - $entrada->getTimestamp();
+                                    $diff = $entrada->getTimestamp() - $salida->getTimestamp(); // entrada - salida (positivo)
                                     $minutos = (int)($diff / 60);
-                                    if ($minutos > 60) {
+                                    if ($minutos > 60 || $minutos < 0) {
                                         $mostrarError = true;
                                     }
                                 }
