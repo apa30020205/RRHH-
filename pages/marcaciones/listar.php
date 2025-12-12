@@ -560,6 +560,9 @@ include __DIR__ . '/../../includes/header.php';
                     <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
                         Alm. Salida
                     </th>
+                    <th style="padding: 0.5rem 0.75rem; text-align: center; border: 1px solid #dee2e6; width: 80px; min-width: 80px;">
+                        Alm.
+                    </th>
                     <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
                         Alm. Entrada
                     </th>
@@ -605,7 +608,7 @@ include __DIR__ . '/../../includes/header.php';
                             }
                             ?>
                         </td>
-                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php 
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; background-color: #BBDEFB; <?php 
                             if ($marcacion['hora_entrada']) {
                                 // Usar el horario del funcionario ya obtenido en el bucle anterior
                                 $horaLimiteFunc = $marcacion['h_entrada_func'] ?? null;
@@ -648,7 +651,7 @@ include __DIR__ . '/../../includes/header.php';
                                     // - 8:00:00, 8:00:10, 8:00:59 → PUNTUAL (mismo minuto)
                                     // - 8:01:00 en adelante → TARDE (siguiente minuto)
                                     if ($minutosEntrada > $minutosLimite) {
-                                        echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
+                                        echo 'background-color: #ffcccc !important; color: #721c24; font-weight: bold;';
                                     }
                                 } else {
                                     // Si no hay horario, usar 08:00:00 por defecto
@@ -664,7 +667,7 @@ include __DIR__ . '/../../includes/header.php';
                                     $minutosLimite = 8 * 60 + 0; // 08:00 = 480 minutos
                                     // Solo es tarde si es DESPUÉS del minuto 8:00 (8:01 en adelante)
                                     if ($minutosEntrada > $minutosLimite) {
-                                        echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
+                                        echo 'background-color: #ffcccc !important; color: #721c24; font-weight: bold;';
                                     }
                                 }
                             }
@@ -683,7 +686,7 @@ include __DIR__ . '/../../includes/header.php';
                             ?>
                         </td>
                         <!-- Columna Alm. Salida -->
-                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; background-color: #E3F2FD; <?php
                             // Usar valores calculados si existen, sino usar valores de BD
                             $almuerzoSalida = $marcacion['almuerzo_salida_calc'] ?? $marcacion['almuerzo_salida'] ?? null;
                             $almuerzoEntrada = $marcacion['almuerzo_entrada_calc'] ?? $marcacion['almuerzo_entrada'] ?? null;
@@ -706,7 +709,7 @@ include __DIR__ . '/../../includes/header.php';
                             }
                             
                             if ($mostrarError) {
-                                echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
+                                echo 'background-color: #ffcccc !important; color: #721c24; font-weight: bold;';
                             }
                         ?>">
                             <?php 
@@ -721,10 +724,39 @@ include __DIR__ . '/../../includes/header.php';
                             }
                             ?>
                         </td>
+                        <!-- Columna Alm. (Diferencia) -->
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; background-color: #fff3cd; color: #856404; font-weight: bold; width: 80px; min-width: 80px;">
+                            <?php 
+                            // Calcular diferencia entre Alm. Entrada - Alm. Salida
+                            if ($almuerzoSalida && $almuerzoEntrada) {
+                                $salida = DateTime::createFromFormat('H:i:s', $almuerzoSalida);
+                                $entrada = DateTime::createFromFormat('H:i:s', $almuerzoEntrada);
+                                if ($entrada && $salida) {
+                                    $diff = $entrada->getTimestamp() - $salida->getTimestamp();
+                                    $minutos = (int)($diff / 60);
+                                    if ($minutos > 0) {
+                                        $horas = floor($minutos / 60);
+                                        $mins = $minutos % 60;
+                                        if ($horas > 0) {
+                                            echo sprintf('%d:%02d', $horas, $mins);
+                                        } else {
+                                            echo sprintf('%d min', $mins);
+                                        }
+                                    } else {
+                                        echo '-';
+                                    }
+                                } else {
+                                    echo '-';
+                                }
+                            } else {
+                                echo '-';
+                            }
+                            ?>
+                        </td>
                         <!-- Columna Alm. Entrada -->
-                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; background-color: #E3F2FD; <?php
                             if ($mostrarError) {
-                                echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
+                                echo 'background-color: #ffcccc !important; color: #721c24; font-weight: bold;';
                             }
                         ?>">
                             <?php 
@@ -739,7 +771,7 @@ include __DIR__ . '/../../includes/header.php';
                             }
                             ?>
                         </td>
-                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center;">
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; background-color: #BBDEFB;">
                             <?php 
                             if ($marcacion['hora_salida']) {
                                 $hora = new DateTime($marcacion['hora_salida']);
@@ -753,10 +785,10 @@ include __DIR__ . '/../../includes/header.php';
                             }
                             ?>
                         </td>
-                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php 
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; background-color: #90CAF9; <?php 
                             // Fondo rojo solo si hay tiempo faltante calculado
                             if (isset($marcacion['tiempo_faltante_calc']) && $marcacion['tiempo_faltante_calc'] !== '00:00:00') {
-                                echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
+                                echo 'background-color: #ffcccc !important; color: #721c24; font-weight: bold;';
                             }
                         ?>">
                             <?php 
