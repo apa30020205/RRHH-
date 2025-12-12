@@ -16,6 +16,10 @@ $pageTitle = 'Listado Permisos/Vacaciones - Sistema RRHH';
 include __DIR__ . '/../../includes/header.php';
 ?>
 
+<div class="page-header">
+    <h2>Permisos/Vacaciones</h2>
+</div>
+
 <style>
     body {
         background-color: #f5f5f5;
