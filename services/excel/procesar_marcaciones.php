@@ -20,6 +20,7 @@ require_once __DIR__ . '/../../roles_rrhh/middleware/auth_middleware.php';
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/funciones_calculo_horas.php';
+require_once __DIR__ . '/../../includes/funciones_deteccion_almuerzo.php';
 require_once __DIR__ . '/../../classes/Database.php';
 require_once __DIR__ . '/../../roles_rrhh/classes/Auth.php';
 
@@ -80,10 +81,12 @@ try {
     
     // Preparar statement para insertar/actualizar marcaciones
     $stmtMarcacion = $db->prepare("
-        INSERT INTO marcaciones (cedula, fecha, hora_entrada, hora_salida, horas_trabajadas, tiempo_faltante, fecha_importacion)
-        VALUES (?, ?, ?, ?, ?, ?, NOW())
+        INSERT INTO marcaciones (cedula, fecha, hora_entrada, almuerzo_salida, almuerzo_entrada, hora_salida, horas_trabajadas, tiempo_faltante, fecha_importacion)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ON DUPLICATE KEY UPDATE
             hora_entrada = VALUES(hora_entrada),
+            almuerzo_salida = VALUES(almuerzo_salida),
+            almuerzo_entrada = VALUES(almuerzo_entrada),
             hora_salida = VALUES(hora_salida),
             horas_trabajadas = VALUES(horas_trabajadas),
             tiempo_faltante = VALUES(tiempo_faltante),
@@ -121,24 +124,27 @@ try {
     // Procesar cada fila y agrupar por cedula + fecha
     foreach ($datosFiltrados as $indice => $fila) {
         try {
-            // Extraer datos de las columnas A, F, H, I
+            // Extraer datos de las columnas A, F, H, I, J
             // Columna A (índice 0) = ID de Usuario
             // Columna F (índice 5) = Grabar fecha
             // Columna H (índice 7) = Hora mas temprana
             // Columna I (índice 8) = última Hora
+            // Columna J (índice 9) = Hora de Registro (todas las horas del día)
             
             $idUsuario = null;
             $fecha = null;
             $horaEntrada = null;
             $horaSalida = null;
+            $horaRegistro = null; // Columna J
             
             // Si tenemos las columnas detectadas, usarlas para mapear
-            if (!empty($columnasDetectadas) && count($columnasDetectadas) >= 9) {
+            if (!empty($columnasDetectadas) && count($columnasDetectadas) >= 10) {
                 // Buscar columnas por nombre o índice
                 $columnaA = $columnasDetectadas[0] ?? null; // ID de Usuario
                 $columnaF = $columnasDetectadas[5] ?? null; // Grabar fecha
                 $columnaH = $columnasDetectadas[7] ?? null; // Hora mas temprana
                 $columnaI = $columnasDetectadas[8] ?? null; // última Hora
+                $columnaJ = $columnasDetectadas[9] ?? null; // Hora de Registro
                 
                 // Obtener valores usando los nombres de las columnas
                 if ($columnaA && isset($fila[$columnaA])) {
@@ -171,6 +177,14 @@ try {
                         $valor = (string)$valor;
                     }
                     $horaSalida = trim((string)($valor ?? ''));
+                }
+                
+                if ($columnaJ && isset($fila[$columnaJ])) {
+                    $valor = $fila[$columnaJ];
+                    if (is_object($valor)) {
+                        $valor = (string)$valor;
+                    }
+                    $horaRegistro = trim((string)($valor ?? ''));
                 }
             } else {
                 // Fallback: convertir fila a array numérico para acceder por índice
@@ -210,6 +224,15 @@ try {
                         $valor = (string)$valor;
                     }
                     $horaSalida = trim((string)($valor ?? ''));
+                }
+                
+                // Columna J (índice 9) = Hora de Registro
+                if (isset($valores[9])) {
+                    $valor = $valores[9];
+                    if (is_object($valor)) {
+                        $valor = (string)$valor;
+                    }
+                    $horaRegistro = trim((string)($valor ?? ''));
                 }
             }
             
@@ -260,7 +283,8 @@ try {
             if (!isset($marcacionesAgrupadas[$cedulaBD][$fechaFormateada])) {
                 $marcacionesAgrupadas[$cedulaBD][$fechaFormateada] = [
                     'entradas' => [],
-                    'salidas' => []
+                    'salidas' => [],
+                    'horas_registro' => [] // Todas las horas de la Columna J
                 ];
             }
             
@@ -270,6 +294,23 @@ try {
             }
             if ($horaSalidaFormateada) {
                 $marcacionesAgrupadas[$cedulaBD][$fechaFormateada]['salidas'][] = $horaSalidaFormateada;
+            }
+            
+            // Agregar hora de registro (Columna J) si existe
+            if (!empty($horaRegistro)) {
+                // Normalizar formato de hora (agregar segundos si faltan)
+                $horaNormalizada = trim($horaRegistro);
+                if (strlen($horaNormalizada) == 5) {
+                    $horaNormalizada .= ':00';
+                }
+                // Validar que sea una hora válida
+                $dt = DateTime::createFromFormat('H:i:s', $horaNormalizada);
+                if ($dt === false) {
+                    $dt = DateTime::createFromFormat('H:i', $horaNormalizada);
+                }
+                if ($dt !== false) {
+                    $marcacionesAgrupadas[$cedulaBD][$fechaFormateada]['horas_registro'][] = $dt->format('H:i:s');
+                }
             }
             
             $totalProcesados++;
@@ -303,6 +344,17 @@ try {
                 if (!empty($marcacion['salidas'])) {
                     sort($marcacion['salidas']); // Ordenar de menor a mayor
                     $horaSalidaFinal = $marcacion['salidas'][count($marcacion['salidas']) - 1]; // Última (más tardía)
+                }
+                
+                // Detectar horario de almuerzo usando las horas de registro (Columna J)
+                $almuerzoEntrada = null;
+                $almuerzoSalida = null;
+                if (!empty($marcacion['horas_registro'])) {
+                    $resultadoAlmuerzo = detectarHorarioAlmuerzo($marcacion['horas_registro']);
+                    if ($resultadoAlmuerzo) {
+                        $almuerzoEntrada = $resultadoAlmuerzo['entrada'];
+                        $almuerzoSalida = $resultadoAlmuerzo['salida'];
+                    }
                 }
                 
                 // Calcular horas trabajadas y tiempo faltante usando la función
@@ -348,6 +400,8 @@ try {
                     $cedula,
                     $fecha,  // Usar $fecha (clave del bucle) que ya está formateada, NO $fechaFormateada del scope anterior
                     $horaEntradaFinal,
+                    $almuerzoSalida,  // almuerzo_salida
+                    $almuerzoEntrada, // almuerzo_entrada
                     $horaSalidaFinal,
                     $horasTrabajadas,
                     $tiempoFaltante

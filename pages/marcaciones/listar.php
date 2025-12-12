@@ -88,6 +88,8 @@ try {
     // Usar TIME_FORMAT para normalizar el formato de hora_entrada y hora_salida
     $sql = "SELECT m.id_marcacion, m.cedula, m.fecha, 
                    TIME_FORMAT(m.hora_entrada, '%H:%i:%s') as hora_entrada,
+                   TIME_FORMAT(m.almuerzo_salida, '%H:%i:%s') as almuerzo_salida,
+                   TIME_FORMAT(m.almuerzo_entrada, '%H:%i:%s') as almuerzo_entrada,
                    TIME_FORMAT(m.hora_salida, '%H:%i:%s') as hora_salida,
                    m.horas_trabajadas, m.tiempo_faltante, m.fecha_importacion,
                    f.nombre, f.apellido 
@@ -513,6 +515,12 @@ include __DIR__ . '/../../includes/header.php';
                             Hora Entrada <?php echo iconoOrdenamiento('hora_entrada'); ?>
                         </a>
                     </th>
+                    <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
+                        Alm. Salida
+                    </th>
+                    <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
+                        Alm. Entrada
+                    </th>
                     <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
                         <a href="<?php echo urlOrdenar('hora_salida', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
                            style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
@@ -625,6 +633,62 @@ include __DIR__ . '/../../includes/header.php';
                                 // Formato 12 horas con a.m./p.m.
                                 $horaFormato = $hora->format('g:i');
                                 $ampm = strtolower($hora->format('A')); // am o pm
+                                $ampm = str_replace(['am', 'pm'], ['a.m.', 'p.m.'], $ampm);
+                                echo $horaFormato . ' ' . $ampm;
+                            } else {
+                                echo '<span style="color: #dc3545;">-</span>';
+                            }
+                            ?>
+                        </td>
+                        <!-- Columna Alm. Salida -->
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php
+                            // Validación visual: fondo rojo si es NULL o si excede 1 hora
+                            $almuerzoSalida = $marcacion['almuerzo_salida'] ?? null;
+                            $almuerzoEntrada = $marcacion['almuerzo_entrada'] ?? null;
+                            $mostrarError = false;
+                            
+                            if (empty($almuerzoSalida) || empty($almuerzoEntrada)) {
+                                $mostrarError = true;
+                            } else {
+                                // Calcular diferencia en minutos
+                                $entrada = DateTime::createFromFormat('H:i:s', $almuerzoEntrada);
+                                $salida = DateTime::createFromFormat('H:i:s', $almuerzoSalida);
+                                if ($entrada && $salida) {
+                                    $diff = $salida->getTimestamp() - $entrada->getTimestamp();
+                                    $minutos = (int)($diff / 60);
+                                    if ($minutos > 60) {
+                                        $mostrarError = true;
+                                    }
+                                }
+                            }
+                            
+                            if ($mostrarError) {
+                                echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
+                            }
+                        ?>">
+                            <?php 
+                            if ($almuerzoSalida) {
+                                $hora = new DateTime($almuerzoSalida);
+                                $horaFormato = $hora->format('g:i');
+                                $ampm = strtolower($hora->format('A'));
+                                $ampm = str_replace(['am', 'pm'], ['a.m.', 'p.m.'], $ampm);
+                                echo $horaFormato . ' ' . $ampm;
+                            } else {
+                                echo '<span style="color: #dc3545;">-</span>';
+                            }
+                            ?>
+                        </td>
+                        <!-- Columna Alm. Entrada -->
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php
+                            if ($mostrarError) {
+                                echo 'background-color: #ffcccc; color: #721c24; font-weight: bold;';
+                            }
+                        ?>">
+                            <?php 
+                            if ($almuerzoEntrada) {
+                                $hora = new DateTime($almuerzoEntrada);
+                                $horaFormato = $hora->format('g:i');
+                                $ampm = strtolower($hora->format('A'));
                                 $ampm = str_replace(['am', 'pm'], ['a.m.', 'p.m.'], $ampm);
                                 echo $horaFormato . ' ' . $ampm;
                             } else {
