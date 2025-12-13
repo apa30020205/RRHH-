@@ -271,5 +271,55 @@ function obtenerMensaje() {
     }
     return null;
 }
+
+/**
+ * Convierte un valor TIME de MySQL a días y horas
+ * @param string|null $timeValue Valor TIME en formato HH:MM:SS o NULL
+ * @return array ['dias' => int, 'horas' => int]
+ */
+function timeToDiasHoras($timeValue) {
+    if (empty($timeValue) || $timeValue === null) {
+        return ['dias' => 0, 'horas' => 0];
+    }
+    
+    // Parsear el valor TIME (puede ser HH:MM:SS o HH:MM)
+    $partes = explode(':', $timeValue);
+    $horas = (int)($partes[0] ?? 0);
+    $minutos = (int)($partes[1] ?? 0);
+    $segundos = (int)($partes[2] ?? 0);
+    
+    // Convertir todo a segundos
+    $totalSegundos = $horas * 3600 + $minutos * 60 + $segundos;
+    
+    // Convertir a días y horas
+    $dias = floor($totalSegundos / 86400); // 86400 segundos = 1 día
+    $horasRestantes = floor(($totalSegundos % 86400) / 3600); // Horas restantes
+    
+    return [
+        'dias' => $dias,
+        'horas' => $horasRestantes
+    ];
+}
+
+/**
+ * Convierte días y horas a formato TIME de MySQL
+ * @param int $dias Número de días
+ * @param int $horas Número de horas (0-23)
+ * @return string|null Valor TIME en formato HH:MM:SS o NULL si ambos son 0
+ */
+function diasHorasToTime($dias, $horas) {
+    $dias = (int)$dias;
+    $horas = (int)$horas;
+    
+    if ($dias === 0 && $horas === 0) {
+        return null;
+    }
+    
+    // Convertir días a horas y sumar
+    $horasTotales = ($dias * 24) + $horas;
+    
+    // Formatear como TIME (HH:MM:SS)
+    return sprintf('%02d:00:00', $horasTotales);
+}
 ?>
 

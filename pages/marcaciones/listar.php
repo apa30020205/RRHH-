@@ -324,11 +324,57 @@ try {
     $hEntrada = null;
     $hSalida = null;
     $funExtraActual = null;
+    // Verificar si los campos de derechos existen en la tabla
+    // Primero verificar campos nuevos (TIME), luego campos antiguos (DECIMAL)
+    $camposDerechosExisten = false;
+    $usarCamposTime = false; // Indica si usar campos TIME o DECIMAL
+    if (!empty($cedulaFiltro) && !$exFuncionario) {
+        try {
+            // Verificar si existen los nuevos campos TIME
+            $stmtCheckTime = $db->query("SHOW COLUMNS FROM funcionarios LIKE 'permisos_justificados_acumulados'");
+            if ($stmtCheckTime->rowCount() > 0) {
+                $usarCamposTime = true;
+                $camposDerechosExisten = true;
+            } else {
+                // Verificar campos antiguos DECIMAL
+                $stmtCheck = $db->query("SHOW COLUMNS FROM funcionarios LIKE 'vacaciones_dias_acumulados'");
+                $camposDerechosExisten = $stmtCheck->rowCount() > 0;
+            }
+        } catch (PDOException $e) {
+            $camposDerechosExisten = false;
+            $usarCamposTime = false;
+        }
+    }
+    
     if (!empty($cedulaFiltro)) {
         // Para funcionarios activos, obtener de tabla funcionarios (incluye h_entrada y h_salida)
         // Para ex-funcionarios, solo obtener nombre y apellido
         if (!$exFuncionario) {
-            $stmtFunc = $db->prepare("SELECT nombre, apellido, h_entrada, h_salida, fun_extra FROM funcionarios WHERE cedula = ?");
+            // Construir query dinámicamente según si los campos de derechos existen
+            if ($camposDerechosExisten) {
+                if ($usarCamposTime) {
+                    // Usar nuevos campos TIME
+                    $stmtFunc = $db->prepare("SELECT nombre, apellido, h_entrada, h_salida, fun_extra, 
+                                                     vacaciones_dias_acumulados, 
+                                                     permisos_justificados_acumulados,
+                                                     permisos_no_justificados_acumulados,
+                                                     ano_derechos
+                                              FROM funcionarios WHERE cedula = ?");
+                } else {
+                    // Usar campos antiguos DECIMAL
+                    $stmtFunc = $db->prepare("SELECT nombre, apellido, h_entrada, h_salida, fun_extra, 
+                                                     vacaciones_dias_acumulados, 
+                                                     permisos_justificados_dias_acumulados, 
+                                                     permisos_justificados_horas_acumuladas,
+                                                     permisos_no_justificados_dias_acumulados,
+                                                     permisos_no_justificados_horas_acumuladas,
+                                                     ano_derechos
+                                              FROM funcionarios WHERE cedula = ?");
+                }
+            } else {
+                $stmtFunc = $db->prepare("SELECT nombre, apellido, h_entrada, h_salida, fun_extra 
+                                          FROM funcionarios WHERE cedula = ?");
+            }
         } else {
             $stmtFunc = $db->prepare("SELECT nombre, apellido FROM ex_funcionarios WHERE cedula = ?");
         }
@@ -352,6 +398,44 @@ try {
                 $mapeoValores = ['Jefe' => 'VIP', 'cesante' => 'Cesante'];
                 if ($funExtraActual && isset($mapeoValores[$funExtraActual])) {
                     $funExtraActual = $mapeoValores[$funExtraActual];
+                }
+                
+                // Obtener datos de derechos solo si los campos existen
+                if ($camposDerechosExisten) {
+                    if ($usarCamposTime) {
+                        // Convertir campos TIME a días y horas
+                        $permisosJustificados = timeToDiasHoras($funcionario['permisos_justificados_acumulados'] ?? null);
+                        $permisosNoJustificados = timeToDiasHoras($funcionario['permisos_no_justificados_acumulados'] ?? null);
+                        
+                        $derechosFuncionario = [
+                            'vacaciones_dias' => (int)($funcionario['vacaciones_dias_acumulados'] ?? 0),
+                            'permisos_justificados_dias' => $permisosJustificados['dias'],
+                            'permisos_justificados_horas' => $permisosJustificados['horas'],
+                            'permisos_no_justificados_dias' => $permisosNoJustificados['dias'],
+                            'permisos_no_justificados_horas' => $permisosNoJustificados['horas'],
+                            'ano_derechos' => $funcionario['ano_derechos'] ?? date('Y')
+                        ];
+                    } else {
+                        // Usar campos antiguos DECIMAL
+                        $derechosFuncionario = [
+                            'vacaciones_dias' => (int)($funcionario['vacaciones_dias_acumulados'] ?? 0),
+                            'permisos_justificados_dias' => (int)($funcionario['permisos_justificados_dias_acumulados'] ?? 0),
+                            'permisos_justificados_horas' => (int)($funcionario['permisos_justificados_horas_acumuladas'] ?? 0),
+                            'permisos_no_justificados_dias' => (int)($funcionario['permisos_no_justificados_dias_acumulados'] ?? 0),
+                            'permisos_no_justificados_horas' => (int)($funcionario['permisos_no_justificados_horas_acumuladas'] ?? 0),
+                            'ano_derechos' => $funcionario['ano_derechos'] ?? date('Y')
+                        ];
+                    }
+                } else {
+                    // Si los campos no existen, inicializar con valores por defecto
+                    $derechosFuncionario = [
+                        'vacaciones_dias' => 0,
+                        'permisos_justificados_dias' => 0,
+                        'permisos_justificados_horas' => 0,
+                        'permisos_no_justificados_dias' => 0,
+                        'permisos_no_justificados_horas' => 0,
+                        'ano_derechos' => date('Y')
+                    ];
                 }
             }
         }
@@ -912,6 +996,205 @@ include __DIR__ . '/../../includes/header.php';
     <div class="alert alert-info" style="padding: 1rem; background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 5px; color: #0c5460;">
         <i class="fas fa-info-circle"></i> No se encontraron marcaciones<?php echo !empty($busqueda) || !empty($fechaDesde) || !empty($fechaHasta) ? ' que coincidan con los filtros' : ''; ?>.
     </div>
+<?php endif; ?>
+
+<!-- Sección de Derechos/Permisos/Vacaciones -->
+<?php if (!empty($cedulaFiltro) && !$exFuncionario && $derechosFuncionario !== null && Auth::isAdmin()): ?>
+<div style="margin-top: 2rem; padding: 1.5rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px;">
+    <h3 style="margin-top: 0; margin-bottom: 1rem; color: #333; border-bottom: 2px solid #007bff; padding-bottom: 0.5rem;">
+        <i class="fas fa-calendar-check"></i> Permisos/Vacaciones
+    </h3>
+    
+    <form id="form-derechos-funcionario" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <label for="ano_derechos" style="font-weight: bold; color: #555; white-space: nowrap;">
+                Año:
+            </label>
+            <input type="number" 
+                   id="ano_derechos" 
+                   name="ano_derechos" 
+                   value="<?php echo htmlspecialchars($derechosFuncionario['ano_derechos']); ?>" 
+                   min="2000" 
+                   max="2100"
+                   style="width: 80px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px;">
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <label for="vacaciones_dias" style="font-weight: bold; color: #555; white-space: nowrap;">
+                Vacaciones:
+                <i class="fas fa-info-circle" style="color: #17a2b8; margin-left: 0.25rem;" 
+                   title="Días de vacaciones acumulados. Se toman por día completo. No afecta horas trabajadas del día."></i>
+            </label>
+            <input type="number" 
+                   id="vacaciones_dias" 
+                   name="vacaciones_dias" 
+                   value="<?php echo sprintf('%02d', (int)$derechosFuncionario['vacaciones_dias']); ?>" 
+                   step="1" 
+                   min="0"
+                   max="99"
+                   style="width: 60px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px; text-align: center;">
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <label for="permisos_justificados_dias" style="font-weight: bold; color: #555; white-space: nowrap;">
+                Permisos Justificados - Días:
+                <i class="fas fa-clock" style="color: #ff9800; margin-left: 0.25rem;" 
+                   title="Días de permisos justificados. Pueden tomarse por día completo o por horas. Afecta horas trabajadas."></i>
+            </label>
+            <input type="number" 
+                   id="permisos_justificados_dias" 
+                   name="permisos_justificados_dias" 
+                   value="<?php echo sprintf('%02d', (int)$derechosFuncionario['permisos_justificados_dias']); ?>" 
+                   step="1" 
+                   min="0"
+                   max="99"
+                   style="width: 60px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px; text-align: center;">
+            <label for="permisos_justificados_horas" style="font-weight: bold; color: #555; white-space: nowrap; margin-left: 0.5rem;">
+                Horas:
+            </label>
+            <input type="number" 
+                   id="permisos_justificados_horas" 
+                   name="permisos_justificados_horas" 
+                   value="<?php echo sprintf('%02d', (int)$derechosFuncionario['permisos_justificados_horas']); ?>" 
+                   step="1" 
+                   min="0"
+                   max="23"
+                   style="width: 60px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px; text-align: center;">
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <label for="permisos_no_justificados_dias" style="font-weight: bold; color: #555; white-space: nowrap;">
+                Permisos No Justificados - Días:
+                <i class="fas fa-clock" style="color: #dc3545; margin-left: 0.25rem;" 
+                   title="Días de permisos no justificados. Pueden tomarse por día completo o por horas. Afecta horas trabajadas."></i>
+            </label>
+            <input type="number" 
+                   id="permisos_no_justificados_dias" 
+                   name="permisos_no_justificados_dias" 
+                   value="<?php echo sprintf('%02d', (int)$derechosFuncionario['permisos_no_justificados_dias']); ?>" 
+                   step="1" 
+                   min="0"
+                   max="99"
+                   style="width: 60px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px; text-align: center;">
+            <label for="permisos_no_justificados_horas" style="font-weight: bold; color: #555; white-space: nowrap; margin-left: 0.5rem;">
+                Horas:
+            </label>
+            <input type="number" 
+                   id="permisos_no_justificados_horas" 
+                   name="permisos_no_justificados_horas" 
+                   value="<?php echo sprintf('%02d', (int)$derechosFuncionario['permisos_no_justificados_horas']); ?>" 
+                   step="1" 
+                   min="0"
+                   max="23"
+                   style="width: 60px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px; text-align: center;">
+        </div>
+        
+        <div style="margin-left: auto;">
+            <button type="button" 
+                    id="btn-guardar-derechos" 
+                    class="btn btn-primary" 
+                    style="padding: 0.75rem 2rem; font-size: 1.05em;">
+                <i class="fas fa-save"></i> Guardar
+            </button>
+            <span id="mensaje-derechos" style="margin-left: 1rem; color: #28a745; font-weight: bold; font-size: 1.05em; display: none;"></span>
+        </div>
+    </form>
+    
+    <div style="margin-top: 1rem; padding: 0.75rem; background: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 3px;">
+        <strong style="color: #1976d2;">Nota:</strong>
+        <ul style="margin: 0.5rem 0 0 1.5rem; color: #555;">
+            <li><strong>Vacaciones:</strong> Se toman por día completo. No afectan las horas trabajadas del día.</li>
+            <li><strong>Permisos Justificados y No Justificados:</strong> Pueden tomarse por día completo o por horas. Estos campos <strong>afectan el cálculo de horas trabajadas</strong>.</li>
+            <li>En Panamá, 1 día laboral = 7 horas.</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btnGuardarDerechos = document.getElementById('btn-guardar-derechos');
+    const mensajeDerechos = document.getElementById('mensaje-derechos');
+    const formDerechos = document.getElementById('form-derechos-funcionario');
+    
+    if (btnGuardarDerechos) {
+        btnGuardarDerechos.addEventListener('click', function() {
+            // Obtener valores del formulario (convertir a enteros)
+            const datos = {
+                cedula: '<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>',
+                ano: parseInt(document.getElementById('ano_derechos').value) || null,
+                vacaciones_dias: parseInt(document.getElementById('vacaciones_dias').value) || 0,
+                permisos_justificados_dias: parseInt(document.getElementById('permisos_justificados_dias').value) || 0,
+                permisos_justificados_horas: parseInt(document.getElementById('permisos_justificados_horas').value) || 0,
+                permisos_no_justificados_dias: parseInt(document.getElementById('permisos_no_justificados_dias').value) || 0,
+                permisos_no_justificados_horas: parseInt(document.getElementById('permisos_no_justificados_horas').value) || 0
+            };
+            
+            // Deshabilitar botón mientras se procesa
+            btnGuardarDerechos.disabled = true;
+            btnGuardarDerechos.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+            mensajeDerechos.style.display = 'none';
+            
+            // Enviar petición AJAX
+            fetch('<?php echo BASE_URL; ?>/pages/funcionarios/actualizar_derechos.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(datos)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mensajeDerechos.textContent = '✓ ' + (data.mensaje || 'Derechos actualizados correctamente');
+                    mensajeDerechos.style.color = '#28a745';
+                    mensajeDerechos.style.display = 'inline';
+                    
+                    // Ocultar mensaje después de 3 segundos
+                    setTimeout(() => {
+                        mensajeDerechos.style.display = 'none';
+                    }, 3000);
+                } else {
+                    mensajeDerechos.textContent = '✗ Error: ' + (data.error || 'No se pudo actualizar');
+                    mensajeDerechos.style.color = '#dc3545';
+                    mensajeDerechos.style.display = 'inline';
+                    alert('Error: ' + (data.error || 'No se pudo actualizar los derechos'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mensajeDerechos.textContent = '✗ Error al comunicarse con el servidor';
+                mensajeDerechos.style.color = '#dc3545';
+                mensajeDerechos.style.display = 'inline';
+                alert('Error al comunicarse con el servidor');
+            })
+            .finally(() => {
+                // Rehabilitar botón
+                btnGuardarDerechos.disabled = false;
+                btnGuardarDerechos.innerHTML = '<i class="fas fa-save"></i> Guardar Derechos';
+            });
+        });
+        
+        // Formatear inputs para mostrar siempre dos dígitos al perder el foco
+        const inputsDerechos = ['vacaciones_dias', 'permisos_justificados_dias', 'permisos_justificados_horas', 
+                                'permisos_no_justificados_dias', 'permisos_no_justificados_horas'];
+        inputsDerechos.forEach(function(inputId) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.addEventListener('blur', function() {
+                    const valor = parseInt(this.value) || 0;
+                    // Para horas, limitar a 23 máximo
+                    if (inputId.includes('horas')) {
+                        const valorFinal = Math.min(valor, 23);
+                        this.value = String(valorFinal).padStart(2, '0');
+                    } else {
+                        this.value = String(valor).padStart(2, '0');
+                    }
+                });
+            }
+        });
+    }
+});
+</script>
 <?php endif; ?>
 
 <?php if (!empty($cedulaFiltro) && !$exFuncionario): ?>
