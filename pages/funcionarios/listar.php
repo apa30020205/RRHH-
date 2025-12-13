@@ -141,14 +141,14 @@ function urlOrdenar($campo, $busquedaActual = '') {
 // Función para obtener icono de ordenamiento
 function iconoOrdenamiento($campo) {
     if (!isset($_GET['ordenar']) || $_GET['ordenar'] !== $campo) {
-        return '<i class="fas fa-sort" style="opacity: 0.3; margin-left: 5px;"></i>';
+        return '<i class="fas fa-sort" style="opacity: 0.3;"></i>';
     }
     
     $direccion = isset($_GET['dir']) && $_GET['dir'] === 'desc' ? 'desc' : 'asc';
     if ($direccion === 'asc') {
-        return '<i class="fas fa-sort-up" style="margin-left: 5px;"></i>';
+        return '<i class="fas fa-sort-up"></i>';
     } else {
-        return '<i class="fas fa-sort-down" style="margin-left: 5px;"></i>';
+        return '<i class="fas fa-sort-down"></i>';
     }
 }
 
@@ -210,71 +210,71 @@ include __DIR__ . '/../../includes/header.php';
                 <tr>
                     <th>
                         <a href="<?php echo urlOrdenar('cedula', $busqueda); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Cédula <?php echo iconoOrdenamiento('cedula'); ?>
                         </a>
                     </th>
                     <th>
                         <a href="<?php echo urlOrdenar('nombre', $busqueda); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Nombre <?php echo iconoOrdenamiento('nombre'); ?>
                         </a>
                     </th>
                     <th>
                         <a href="<?php echo urlOrdenar('apellido', $busqueda); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Apellido <?php echo iconoOrdenamiento('apellido'); ?>
                         </a>
                     </th>
                     <th>
                         <a href="<?php echo urlOrdenar('fecha_nacimiento', $busqueda); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Fecha Nac. <?php echo iconoOrdenamiento('fecha_nacimiento'); ?>
                         </a>
                     </th>
                     <th>
                         <a href="<?php echo urlOrdenar('edad', $busqueda); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Edad <?php echo iconoOrdenamiento('edad'); ?>
                         </a>
                     </th>
                     <th>
                         <a href="<?php echo urlOrdenar('sangre', $busqueda); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Sangre <?php echo iconoOrdenamiento('sangre'); ?>
                         </a>
                     </th>
                     <th>
                         <a href="<?php echo urlOrdenar('no_posicion', $busqueda); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             No. Pos. <?php echo iconoOrdenamiento('no_posicion'); ?>
                         </a>
                     </th>
                     <th>
                         <a href="<?php echo urlOrdenar('posicion_funcional', $busqueda); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Posición Funcional <?php echo iconoOrdenamiento('posicion_funcional'); ?>
                         </a>
                     </th>
                     <th>
                         <a href="<?php echo urlOrdenar('fecha_inicio', $busqueda); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Fecha Inicio <?php echo iconoOrdenamiento('fecha_inicio'); ?>
                         </a>
                     </th>
                     <th>
                         <a href="<?php echo urlOrdenar('sede_provincia', $busqueda); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Sede/Provincia <?php echo iconoOrdenamiento('sede_provincia'); ?>
                         </a>
                     </th>
                     <th>
                         <a href="<?php echo urlOrdenar('Direccion', $busqueda); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Dirección <?php echo iconoOrdenamiento('Direccion'); ?>
                         </a>
                     </th>
-                    <th>Acciones</th>
+                    <th style="text-align: center;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -328,7 +328,7 @@ include __DIR__ . '/../../includes/header.php';
         }
         .table-excel thead th {
             padding: 8px 6px;
-            text-align: left;
+            text-align: center;
             font-weight: bold;
             border: 1px solid #1a252f;
             font-size: 1em;
@@ -339,6 +339,8 @@ include __DIR__ . '/../../includes/header.php';
         .table-excel thead th a {
             color: white;
             text-decoration: none;
+            justify-content: center;
+            gap: 0.5rem;
             display: flex;
             align-items: center;
             justify-content: space-between;

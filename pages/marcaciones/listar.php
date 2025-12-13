@@ -599,47 +599,53 @@ include __DIR__ . '/../../includes/header.php';
 
 <!-- Tabla de marcaciones -->
 <?php if (count($marcaciones) > 0): ?>
+    <style>
+        /* Reducir interlineado de la tabla de marcaciones */
+        .data-table th,
+        .data-table td {
+            padding: 0.4rem 0.5rem !important;
+            line-height: 1.3;
+        }
+        .data-table th {
+            padding: 0.5rem 0.5rem !important;
+            text-align: center !important;
+        }
+        .data-table th a {
+            justify-content: center !important;
+        }
+    </style>
     <div style="overflow-x: auto;">
         <table class="data-table" style="width: 100%; border-collapse: collapse; background: white;">
             <thead>
                 <tr style="background: #343a40; color: white;">
-                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        <a href="<?php echo urlOrdenar('id_marcacion', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
-                            ID <?php echo iconoOrdenamiento('id_marcacion'); ?>
-                        </a>
+                    <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
+                        ID
                     </th>
                     <?php if (empty($cedulaFiltro)): ?>
-                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
+                    <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
                         <a href="<?php echo urlOrdenar('cedula', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Cédula <?php echo iconoOrdenamiento('cedula'); ?>
                         </a>
                     </th>
-                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
+                    <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
                         <a href="<?php echo urlOrdenar('nombre', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Nombre <?php echo iconoOrdenamiento('nombre'); ?>
                         </a>
                     </th>
-                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
+                    <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
                         <a href="<?php echo urlOrdenar('apellido', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Apellido <?php echo iconoOrdenamiento('apellido'); ?>
                         </a>
                     </th>
                     <?php endif; ?>
-                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        <a href="<?php echo urlOrdenar('fecha', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
-                            Fecha <?php echo iconoOrdenamiento('fecha'); ?>
-                        </a>
+                    <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
+                        Fecha
                     </th>
-                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        <a href="<?php echo urlOrdenar('hora_entrada', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
-                            Hora Entrada <?php echo iconoOrdenamiento('hora_entrada'); ?>
-                        </a>
+                    <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
+                        Hora Entrada
                     </th>
                     <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
                         Alm. Salida
@@ -650,26 +656,23 @@ include __DIR__ . '/../../includes/header.php';
                     <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
                         Alm. Entrada
                     </th>
-                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
+                    <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
                         <a href="<?php echo urlOrdenar('hora_salida', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
+                           style="color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             Hora Salida <?php echo iconoOrdenamiento('hora_salida'); ?>
                         </a>
                     </th>
-                    <th style="padding: 0.5rem 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        Horas Trabajadas
+                    <th style="padding: 0.5rem 0.75rem; text-align: center; border: 1px solid #dee2e6;">
+                        Horas/Trabajo
                     </th>
-                    <th style="padding: 0.5rem 0.75rem; text-align: left; border: 1px solid #dee2e6;">
+                    <th style="padding: 0.5rem 0.75rem; text-align: center; border: 1px solid #dee2e6;">
                         Horas Dia.
                     </th>
-                    <th style="padding: 0.5rem 0.75rem; text-align: left; border: 1px solid #dee2e6;">
+                    <th style="padding: 0.5rem 0.75rem; text-align: center; border: 1px solid #dee2e6;">
                         Tardanza/Irregular
                     </th>
-                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #dee2e6;">
-                        <a href="<?php echo urlOrdenar('fecha_importacion', $busqueda, $cedulaFiltro, $fechaDesde, $fechaHasta, $exFuncionario); ?>" 
-                           style="color: white; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
-                            Fecha Importación <?php echo iconoOrdenamiento('fecha_importacion'); ?>
-                        </a>
+                    <th style="padding: 0.75rem; text-align: center; border: 1px solid #dee2e6;">
+                        Fecha Importación
                     </th>
                 </tr>
             </thead>
@@ -956,7 +959,7 @@ include __DIR__ . '/../../includes/header.php';
             <strong>Total de registros:</strong> <strong><?php echo $totalRegistros; ?></strong>
         </div>
         <div>
-            <strong>Total Horas Trabajadas:</strong> 
+            <strong>Total Horas/Trabajo:</strong> 
             <span style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem;">
                 <?php 
                 // Mostrar el valor formateado (ya viene en formato HH:MM:SS)
