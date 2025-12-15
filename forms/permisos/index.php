@@ -281,15 +281,15 @@ include __DIR__ . '/../../includes/header.php';
 
 <div class="permisos-grid">
     <!-- Card 1: Jornada Extraordinaria (Azul) -->
-    <div class="permiso-card" onclick="mostrarConstruccion()">
+    <div class="permiso-card">
         <div class="icon-container">
             <i class="fas fa-clock fa-icon"></i>
         </div>
         <h3>Jornada Extraordinaria</h3>
         <p>Autorización para laborar en jornada extraordinaria</p>
-        <button class="btn" onclick="event.stopPropagation(); mostrarConstruccion();">
+        <a href="<?php echo BASE_URL; ?>/forms/permisos/jornada_extraordinaria.php" class="btn">
             <i class="fas fa-edit"></i> Llenar Formulario
-        </button>
+        </a>
     </div>
     
     <!-- Card 2: Misión Oficial (Rojo) -->

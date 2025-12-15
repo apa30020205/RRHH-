@@ -57,7 +57,8 @@ if ($fun_extra === null || $fun_extra === '') {
     // Validar que el valor sea uno de los permitidos
     // Mapear valores antiguos a nuevos para compatibilidad
     $mapeoValores = [
-        'Jefe' => 'VIP',
+        'Jefe' => 'Director',
+        'VIP' => 'Director',
         'cesante' => 'Cesante',
         'otro' => null // Eliminar "otro"
     ];
@@ -72,10 +73,10 @@ if ($fun_extra === null || $fun_extra === '') {
         // Continuar con el proceso (se establecerá como null)
     } else {
         // Validar valores nuevos permitidos
-        $valoresPermitidos = ['VIP', 'Manual', 'Cesante', 'Préstamo', 'Lic. Sueldo', 'Lic. Sin Sueldo'];
+        $valoresPermitidos = ['Director', 'Manual', 'Cesante', 'Préstamo', 'Lic. Sueldo', 'Lic. Sin Sueldo'];
         if (!in_array($fun_extra, $valoresPermitidos)) {
             http_response_code(400);
-            echo json_encode(['success' => false, 'message' => 'Valor no permitido. Solo se permiten: VIP, Manual, Cesante, Préstamo, Lic. Sueldo, Lic. Sin Sueldo']);
+            echo json_encode(['success' => false, 'message' => 'Valor no permitido. Solo se permiten: Director, Manual, Cesante, Préstamo, Lic. Sueldo, Lic. Sin Sueldo']);
             exit();
         }
     }
