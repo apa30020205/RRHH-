@@ -17,28 +17,30 @@ $usuarioId = $_SESSION['id_usuario'] ?? null;
 
 // Variables para mostrar datos
 $funcionario = null;
-$cedulaBuscada = '';
+$busqueda = '';
 $jornadas = [];
 
 // Procesar búsqueda de funcionario
-// La cédula en la BD tiene guiones, usarla tal cual (NO normalizar)
-if (isset($_GET['cedula']) && !empty($_GET['cedula'])) {
-    $cedulaBuscada = trim($_GET['cedula']);
-    
+// Permitir búsqueda por cédula, nombre o apellido
+$busqueda = isset($_GET['buscar']) ? trim($_GET['buscar']) : '';
+
+// Si viene cédula por GET (del filtro o enlace antiguo), usarla como búsqueda
+if (empty($busqueda) && isset($_GET['cedula']) && !empty($_GET['cedula'])) {
+    $busqueda = trim($_GET['cedula']);
+}
+
+if (!empty($busqueda)) {
     try {
         $db = Database::getInstance()->getConnection();
         
-        // Buscar funcionario - usar búsqueda flexible como en horario_manual
-        // La cédula en la BD tiene guiones, pero permitimos buscar con o sin guiones
-        $cedulaLimpia = preg_replace('/[^0-9A-Za-z]/', '', $cedulaBuscada);
+        // Buscar funcionario - por cédula, nombre o apellido (como en horario_manual)
         $stmt = $db->prepare("
             SELECT cedula, nombre, apellido FROM funcionarios 
-            WHERE cedula = ? OR cedula LIKE ? OR REPLACE(REPLACE(cedula, '-', ''), ' ', '') LIKE ?
+            WHERE cedula LIKE ? OR nombre LIKE ? OR apellido LIKE ?
             LIMIT 1
         ");
-        $busquedaLike = '%' . $cedulaBuscada . '%';
-        $cedulaLimpiaLike = '%' . $cedulaLimpia . '%';
-        $stmt->execute([$cedulaBuscada, $busquedaLike, $cedulaLimpiaLike]);
+        $busquedaLike = '%' . $busqueda . '%';
+        $stmt->execute([$busquedaLike, $busquedaLike, $busquedaLike]);
         $funcionario = $stmt->fetch();
         
         // Si se encontró, cargar jornadas registradas usando la cédula exacta de la BD
@@ -257,12 +259,14 @@ if ($mensaje): ?>
     <div class="search-section">
         <h3>Buscar Funcionario</h3>
         <form method="GET" action="">
-            <div class="form-group" style="max-width: 400px;">
-                <label for="cedula_buscar">Cédula del Funcionario</label>
-                <input type="text" id="cedula_buscar" name="cedula" 
-                       value="<?php echo htmlspecialchars($cedulaBuscada); ?>" 
-                       placeholder="8-1234-5678" required>
-                <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem;">Buscar</button>
+            <div class="form-group" style="max-width: 500px;">
+                <label for="buscar_funcionario">Buscar por Cédula, Nombre o Apellido:</label>
+                <input type="text" id="buscar_funcionario" name="buscar" 
+                       value="<?php echo htmlspecialchars($busqueda); ?>" 
+                       placeholder="Ej: 8-1234-5678 o José o Aguirre" required>
+                <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem;">
+                    <i class="fas fa-search"></i> Buscar
+                </button>
             </div>
         </form>
         
@@ -272,9 +276,9 @@ if ($mensaje): ?>
                 <strong>Cédula:</strong> <?php echo htmlspecialchars(formatearCedula($funcionario['cedula'])); ?><br>
                 <strong>Nombre:</strong> <?php echo htmlspecialchars($funcionario['nombre'] . ' ' . $funcionario['apellido']); ?>
             </div>
-        <?php elseif (!empty($cedulaBuscada)): ?>
+        <?php elseif (!empty($busqueda)): ?>
             <div class="alert alert-error">
-                Funcionario no encontrado. Verifique la cédula.
+                Funcionario no encontrado. Verifique la búsqueda (cédula, nombre o apellido).
             </div>
         <?php endif; ?>
     </div>
@@ -343,7 +347,7 @@ if ($mensaje): ?>
     <!-- Filtro de fechas -->
     <div class="filter-section">
         <form method="GET" action="">
-            <input type="hidden" name="cedula" value="<?php echo htmlspecialchars($funcionario ? $funcionario['cedula'] : $cedulaBuscada); ?>">
+            <input type="hidden" name="buscar" value="<?php echo htmlspecialchars($funcionario ? $funcionario['cedula'] : $busqueda); ?>">
             <div class="form-group">
                 <label>Fecha Desde:</label>
                 <input type="date" name="fecha_desde" value="<?php echo htmlspecialchars($fechaDesdeFiltro); ?>">
@@ -354,7 +358,7 @@ if ($mensaje): ?>
             </div>
             <button type="submit" class="btn btn-primary">Filtrar</button>
             <?php if (!empty($fechaDesdeFiltro) || !empty($fechaHastaFiltro)): ?>
-                <a href="?cedula=<?php echo urlencode($funcionario ? $funcionario['cedula'] : $cedulaBuscada); ?>" class="btn">Limpiar Filtro</a>
+                <a href="?buscar=<?php echo urlencode($funcionario ? $funcionario['cedula'] : $busqueda); ?>" class="btn">Limpiar Filtro</a>
             <?php endif; ?>
         </form>
     </div>
@@ -375,8 +379,34 @@ if ($mensaje): ?>
                 <?php foreach ($jornadas as $jornada): ?>
                     <tr>
                         <td><?php echo date('d/m/Y', strtotime($jornada['fecha'])); ?></td>
-                        <td><?php echo date('H:i', strtotime($jornada['hora_desde'])); ?></td>
-                        <td><?php echo date('H:i', strtotime($jornada['hora_hasta'])); ?></td>
+                        <td>
+                            <?php 
+                            if ($jornada['hora_desde']) {
+                                $hora = new DateTime($jornada['hora_desde']);
+                                // Formato 12 horas con a.m./p.m.
+                                $horaFormato = $hora->format('g:i');
+                                $ampm = strtolower($hora->format('A')); // am o pm
+                                $ampm = str_replace(['am', 'pm'], ['a.m.', 'p.m.'], $ampm);
+                                echo $horaFormato . ' ' . $ampm;
+                            } else {
+                                echo '-';
+                            }
+                            ?>
+                        </td>
+                        <td>
+                            <?php 
+                            if ($jornada['hora_hasta']) {
+                                $hora = new DateTime($jornada['hora_hasta']);
+                                // Formato 12 horas con a.m./p.m.
+                                $horaFormato = $hora->format('g:i');
+                                $ampm = strtolower($hora->format('A')); // am o pm
+                                $ampm = str_replace(['am', 'pm'], ['a.m.', 'p.m.'], $ampm);
+                                echo $horaFormato . ' ' . $ampm;
+                            } else {
+                                echo '-';
+                            }
+                            ?>
+                        </td>
                         <td><strong><?php echo $jornada['horas_totales'] ?? '-'; ?></strong></td>
                         <td><?php echo htmlspecialchars(substr($jornada['justificacion'], 0, 50)); ?><?php echo strlen($jornada['justificacion']) > 50 ? '...' : ''; ?></td>
                         <td><?php echo date('d/m/Y H:i', strtotime($jornada['fecha_registro'])); ?></td>

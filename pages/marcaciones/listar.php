@@ -268,26 +268,68 @@ try {
             // Guardar horario de entrada en la marcación para usarlo después en la visualización
             $marcacion['h_entrada_func'] = $hEntradaMarc;
             
+            // Verificar si hay jornada extraordinaria aprobada para esta fecha
+            $tieneJornadaExtra = !empty($marcacion['id_jornada']);
+            
             // Calcular horas contabilizadas
-            $resultado = calcularHorasTrabajadas($marcacion['hora_entrada'], $marcacion['hora_salida'], $hEntradaMarc, $hSalidaMarc);
-            if ($resultado) {
-                $marcacion['horas_contabilizadas'] = $resultado['horas_contabilizadas'];
-                $marcacion['tiempo_faltante_calc'] = $resultado['tiempo_faltante'];
+            if ($tieneJornadaExtra) {
+                // Si hay jornada extraordinaria aprobada, usar las horas reales del reloj (sin límite del horario regular)
+                $entrada = DateTime::createFromFormat('H:i:s', $marcacion['hora_entrada']);
+                if (!$entrada) {
+                    $entrada = DateTime::createFromFormat('H:i', $marcacion['hora_entrada']);
+                }
                 
-                // Sumar minutos contabilizados
-                $partes = explode(':', $resultado['horas_contabilizadas']);
-                $horasCont = (int)($partes[0] ?? 0);
-                $minutosCont = (int)($partes[1] ?? 0);
-                $totalHorasContabilizadas += ($horasCont * 60) + $minutosCont;
+                $salida = DateTime::createFromFormat('H:i:s', $marcacion['hora_salida']);
+                if (!$salida) {
+                    $salida = DateTime::createFromFormat('H:i', $marcacion['hora_salida']);
+                }
                 
-                // Sumar minutos de tardanza
-                $partesTard = explode(':', $resultado['tiempo_faltante']);
-                $horasTard = (int)($partesTard[0] ?? 0);
-                $minutosTard = (int)($partesTard[1] ?? 0);
-                $totalTardanzasMinutos += ($horasTard * 60) + $minutosTard;
+                if ($entrada && $salida) {
+                    // Calcular diferencia en minutos (horas reales del reloj)
+                    $minutosEntrada = $entrada->format('H') * 60 + $entrada->format('i');
+                    $minutosSalida = $salida->format('H') * 60 + $salida->format('i');
+                    $minutosTrabajados = $minutosSalida - $minutosEntrada;
+                    
+                    if ($minutosTrabajados > 0) {
+                        // Convertir a formato HH:MM:SS
+                        $horas = floor($minutosTrabajados / 60);
+                        $minutos = $minutosTrabajados % 60;
+                        $marcacion['horas_contabilizadas'] = sprintf('%02d:%02d:00', $horas, $minutos);
+                        $marcacion['tiempo_faltante_calc'] = '00:00:00'; // No hay tiempo faltante con jornada extraordinaria
+                        
+                        // Sumar minutos contabilizados a total
+                        $totalHorasContabilizadas += ($horas * 60) + $minutos;
+                        // No sumar tardanzas para jornada extraordinaria
+                    } else {
+                        $marcacion['horas_contabilizadas'] = '00:00:00';
+                        $marcacion['tiempo_faltante_calc'] = '00:00:00';
+                    }
+                } else {
+                    $marcacion['horas_contabilizadas'] = '00:00:00';
+                    $marcacion['tiempo_faltante_calc'] = '00:00:00';
+                }
             } else {
-                $marcacion['horas_contabilizadas'] = '00:00:00';
-                $marcacion['tiempo_faltante_calc'] = '00:00:00';
+                // Sin jornada extraordinaria: usar lógica normal (limitada al horario del funcionario)
+                $resultado = calcularHorasTrabajadas($marcacion['hora_entrada'], $marcacion['hora_salida'], $hEntradaMarc, $hSalidaMarc);
+                if ($resultado) {
+                    $marcacion['horas_contabilizadas'] = $resultado['horas_contabilizadas'];
+                    $marcacion['tiempo_faltante_calc'] = $resultado['tiempo_faltante'];
+                    
+                    // Sumar minutos contabilizados
+                    $partes = explode(':', $resultado['horas_contabilizadas']);
+                    $horasCont = (int)($partes[0] ?? 0);
+                    $minutosCont = (int)($partes[1] ?? 0);
+                    $totalHorasContabilizadas += ($horasCont * 60) + $minutosCont;
+                    
+                    // Sumar minutos de tardanza
+                    $partesTard = explode(':', $resultado['tiempo_faltante']);
+                    $horasTard = (int)($partesTard[0] ?? 0);
+                    $minutosTard = (int)($partesTard[1] ?? 0);
+                    $totalTardanzasMinutos += ($horasTard * 60) + $minutosTard;
+                } else {
+                    $marcacion['horas_contabilizadas'] = '00:00:00';
+                    $marcacion['tiempo_faltante_calc'] = '00:00:00';
+                }
             }
         } else {
             $marcacion['horas_contabilizadas'] = '00:00:00';
@@ -1564,8 +1606,34 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
                     <td><?php echo htmlspecialchars(($jornada['nombre'] ?? '') . ' ' . ($jornada['apellido'] ?? '')); ?></td>
                     <?php endif; ?>
                     <td><?php echo date('d/m/Y', strtotime($jornada['fecha'])); ?></td>
-                    <td><?php echo date('H:i', strtotime($jornada['hora_desde'])); ?></td>
-                    <td><?php echo date('H:i', strtotime($jornada['hora_hasta'])); ?></td>
+                    <td>
+                        <?php 
+                        if ($jornada['hora_desde']) {
+                            $hora = new DateTime($jornada['hora_desde']);
+                            // Formato 12 horas con a.m./p.m.
+                            $horaFormato = $hora->format('g:i');
+                            $ampm = strtolower($hora->format('A')); // am o pm
+                            $ampm = str_replace(['am', 'pm'], ['a.m.', 'p.m.'], $ampm);
+                            echo $horaFormato . ' ' . $ampm;
+                        } else {
+                            echo '-';
+                        }
+                        ?>
+                    </td>
+                    <td>
+                        <?php 
+                        if ($jornada['hora_hasta']) {
+                            $hora = new DateTime($jornada['hora_hasta']);
+                            // Formato 12 horas con a.m./p.m.
+                            $horaFormato = $hora->format('g:i');
+                            $ampm = strtolower($hora->format('A')); // am o pm
+                            $ampm = str_replace(['am', 'pm'], ['a.m.', 'p.m.'], $ampm);
+                            echo $horaFormato . ' ' . $ampm;
+                        } else {
+                            echo '-';
+                        }
+                        ?>
+                    </td>
                     <td><strong><?php echo $jornada['horas_totales'] ?? '-'; ?></strong></td>
                     <td>
                         <?php 
