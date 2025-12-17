@@ -112,9 +112,9 @@ include __DIR__ . '/../../includes/header_mantenimiento.php';
     <?php include __DIR__ . '/horario_manual.php'; ?>
 </div>
 
-<!-- Sección 4: Cesante -->
+<!-- Sección 4: EX/Funcionario -->
 <div id="cesante" class="seccion-mantenimiento" style="display: none;">
-    <h2><i class="fas fa-user-times"></i> Funcionarios Cesantes</h2>
+    <h2><i class="fas fa-user-times"></i> EX/Funcionarios</h2>
     <?php include __DIR__ . '/cesante.php'; ?>
 </div>
 

@@ -59,7 +59,7 @@ if ($fun_extra === null || $fun_extra === '') {
     $mapeoValores = [
         'Jefe' => 'Director',
         'VIP' => 'Director',
-        'cesante' => 'Cesante',
+        'cesante' => 'EX/Funcionario',
         'otro' => null // Eliminar "otro"
     ];
     
@@ -73,10 +73,10 @@ if ($fun_extra === null || $fun_extra === '') {
         // Continuar con el proceso (se establecerá como null)
     } else {
         // Validar valores nuevos permitidos
-        $valoresPermitidos = ['Director', 'Manual', 'Cesante', 'Préstamo', 'Lic. Sueldo', 'Lic. Sin Sueldo'];
+        $valoresPermitidos = ['Director', 'Manual', 'EX/Funcionario', 'Préstamo', 'Lic. Sueldo', 'Lic. Sin Sueldo'];
         if (!in_array($fun_extra, $valoresPermitidos)) {
             http_response_code(400);
-            echo json_encode(['success' => false, 'message' => 'Valor no permitido. Solo se permiten: Director, Manual, Cesante, Préstamo, Lic. Sueldo, Lic. Sin Sueldo']);
+            echo json_encode(['success' => false, 'message' => 'Valor no permitido. Solo se permiten: Director, Manual, EX/Funcionario, Préstamo, Lic. Sueldo, Lic. Sin Sueldo']);
             exit();
         }
     }
@@ -139,7 +139,7 @@ try {
                 $datosFuncionario['sede_provincia'],
                 $datosFuncionario['Direccion'],
                 $datosFuncionario['fun_horario_especial'] ?? 0,
-                'cesante' // Marcar como cesante en ex_funcionarios
+                'EX/Funcionario' // Marcar como EX/Funcionario en ex_funcionarios
             ]);
             
             // 4. Obtener todas las marcaciones del funcionario
@@ -192,7 +192,7 @@ try {
             throw $e;
         }
     } else {
-        // Actualizar el campo fun_extra normalmente (no es cesante)
+        // Actualizar el campo fun_extra normalmente (no es EX/Funcionario)
         $stmt = $db->prepare("UPDATE funcionarios SET fun_extra = ? WHERE cedula = ?");
         $stmt->execute([$fun_extra, $cedula]);
         

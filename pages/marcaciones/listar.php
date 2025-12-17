@@ -596,7 +596,7 @@ include __DIR__ . '/../../includes/header.php';
         <!-- Panel de botones fun_extra (dentro del bloque gris, alineado a la derecha) -->
         <?php if (!empty($cedulaFiltro) && !$exFuncionario && Auth::isAdmin()): ?>
         <div class="botones-fun-extra" style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
-            <!-- Primera fila: Director, Manual, Cesante -->
+            <!-- Primera fila: Director, Manual, EX/Funcionario -->
             <div style="display: flex; gap: 0.5rem;">
                 <button type="button" 
                         class="btn-fun-extra <?php echo ($funExtraActual === 'Director' || $funExtraActual === 'VIP') ? 'activo' : ''; ?>" 
@@ -610,11 +610,11 @@ include __DIR__ . '/../../includes/header.php';
                         data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
                     Manual
                 </button>
-                <button type="button" 
-                        class="btn-fun-extra <?php echo $funExtraActual === 'Cesante' ? 'activo' : ''; ?>" 
-                        data-valor="Cesante"
+                <button type="button"
+                        class="btn-fun-extra <?php echo $funExtraActual === 'EX/Funcionario' ? 'activo' : ''; ?>"
+                        data-valor="EX/Funcionario"
                         data-cedula="<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>">
-                    Cesante
+                    EX/Funcionario
                 </button>
             </div>
             <!-- Segunda fila: Préstamo, Lic. Sueldo, Lic. Sin Sueldo -->
@@ -1436,8 +1436,8 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Si se marcó como Cesante, recargar la página (el funcionario ya no existe en funcionarios)
-                if (valor === 'Cesante') {
+                // Si se marcó como EX/Funcionario, recargar la página (el funcionario ya no existe en funcionarios)
+                if (valor === 'EX/Funcionario') {
                     alert('Funcionario movido a ex-funcionarios. La página se recargará.');
                     window.location.reload();
                 }
