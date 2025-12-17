@@ -1069,18 +1069,6 @@ include __DIR__ . '/../../includes/header.php';
     </h3>
     
     <form id="form-derechos-funcionario" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <label for="ano_derechos" style="font-weight: bold; color: #555; white-space: nowrap;">
-                Año:
-            </label>
-            <input type="number" 
-                   id="ano_derechos" 
-                   name="ano_derechos" 
-                   value="<?php echo htmlspecialchars($derechosFuncionario['ano_derechos']); ?>" 
-                   min="2000" 
-                   max="2100"
-                   style="width: 80px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px;">
-        </div>
         
         <div style="display: flex; align-items: center; gap: 0.5rem;">
             <label for="vacaciones_dias" style="font-weight: bold; color: #555; white-space: nowrap;">
@@ -1127,7 +1115,7 @@ include __DIR__ . '/../../includes/header.php';
         
         <div style="display: flex; align-items: center; gap: 0.5rem;">
             <label for="permisos_no_justificados_dias" style="font-weight: bold; color: #555; white-space: nowrap;">
-                Permisos No Justificados - Días:
+                Permisos InJustificados - Días:
                 <i class="fas fa-clock" style="color: #dc3545; margin-left: 0.25rem;" 
                    title="Días de permisos no justificados. Pueden tomarse por día completo o por horas. Afecta horas trabajadas."></i>
             </label>
@@ -1184,7 +1172,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Obtener valores del formulario (convertir a enteros)
             const datos = {
                 cedula: '<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>',
-                ano: parseInt(document.getElementById('ano_derechos').value) || null,
                 vacaciones_dias: parseInt(document.getElementById('vacaciones_dias').value) || 0,
                 permisos_justificados_dias: parseInt(document.getElementById('permisos_justificados_dias').value) || 0,
                 permisos_justificados_horas: parseInt(document.getElementById('permisos_justificados_horas').value) || 0,
