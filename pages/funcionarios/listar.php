@@ -302,8 +302,8 @@ include __DIR__ . '/../../includes/header.php';
                         <!-- Botón verde de estado fun_extra (solo visual, no modificable) -->
                         <?php 
                         $funExtra = $func['fun_extra'] ?? null;
-                        // Solo mostrar si tiene estado Y no es Cesante
-                        if ($funExtra && $funExtra !== 'Cesante'): 
+                        // Solo mostrar si tiene estado Y no es EX/Funcionario
+                        if ($funExtra && $funExtra !== 'EX/Funcionario'): 
                         ?>
                             <span class="btn-fun-extra-estado" 
                                   title="Estado actual del funcionario">

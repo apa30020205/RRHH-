@@ -1,8 +1,8 @@
 <?php
 /**
- * Funcionarios Cesantes
+ * EX/Funcionarios
  * Módulo de Mantenimiento
- * Lista funcionarios marcados como "cesante" en fun_extra
+ * Lista funcionarios marcados como "EX/Funcionario" en fun_extra
  */
 
 require_once __DIR__ . '/../../classes/Database.php';
@@ -152,9 +152,9 @@ function iconoOrdenamiento($campo) {
         </form>
     </div>
     
-    <!-- Lista de Funcionarios Cesantes -->
+    <!-- Lista de EX/Funcionarios -->
     <div class="funcionarios-section">
-        <h3>Ex-Funcionarios Cesantes - Total: <?php echo $totalRegistros; ?></h3>
+        <h3>EX/Funcionarios - Total: <?php echo $totalRegistros; ?></h3>
         
         <?php if ($totalRegistros === 0): ?>
         <div class="alert alert-info">

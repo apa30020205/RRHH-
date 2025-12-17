@@ -97,7 +97,7 @@
                         <i class="fas fa-clock"></i> Horario Manual
                     </a></li>
                     <li><a href="#cesante" class="nav-mant-link" data-section="cesante">
-                        <i class="fas fa-user-times"></i> Cesante
+                        <i class="fas fa-user-times"></i> EX/Funcionario
                     </a></li>
                     <li><a href="#regionales-especiales" class="nav-mant-link" data-section="regionales-especiales">
                         <i class="fas fa-building"></i> Regionales Especiales
