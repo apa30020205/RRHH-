@@ -88,13 +88,37 @@ try {
     // Construir consulta con JOIN a funcionarios/ex_funcionarios para obtener nombre y apellido
     // Usar TIME_FORMAT para normalizar el formato de hora_entrada y hora_salida
     // LEFT JOIN con jornada_extraordinaria para identificar fechas con horas extras
+    // Verificar si las columnas de almuerzo y todas_marcaciones existen en la tabla
+    $stmtCheckColumns = $db->query("
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = '$tablaMarcaciones' 
+        AND COLUMN_NAME IN ('almuerzo_salida', 'almuerzo_entrada', 'todas_marcaciones')
+    ");
+    $existingColumns = $stmtCheckColumns->fetchAll(PDO::FETCH_COLUMN);
+    $tieneAlmuerzoSalida = in_array('almuerzo_salida', $existingColumns);
+    $tieneAlmuerzoEntrada = in_array('almuerzo_entrada', $existingColumns);
+    $tieneTodasMarcaciones = in_array('todas_marcaciones', $existingColumns);
+    
+    // Construir SELECT dinámicamente según las columnas disponibles
+    $camposAlmuerzo = '';
+    if ($tieneAlmuerzoSalida && $tieneAlmuerzoEntrada) {
+        $camposAlmuerzo = "TIME_FORMAT(m.almuerzo_salida, '%H:%i:%s') as almuerzo_salida,
+                           TIME_FORMAT(m.almuerzo_entrada, '%H:%i:%s') as almuerzo_entrada,";
+    } else {
+        $camposAlmuerzo = "NULL as almuerzo_salida,
+                           NULL as almuerzo_entrada,";
+    }
+    
+    $campoTodasMarcaciones = $tieneTodasMarcaciones ? 'm.todas_marcaciones,' : 'NULL as todas_marcaciones,';
+    
     $sql = "SELECT m.id_marcacion, m.cedula, m.fecha, 
                    TIME_FORMAT(m.hora_entrada, '%H:%i:%s') as hora_entrada,
-                   TIME_FORMAT(m.almuerzo_salida, '%H:%i:%s') as almuerzo_salida,
-                   TIME_FORMAT(m.almuerzo_entrada, '%H:%i:%s') as almuerzo_entrada,
+                   $camposAlmuerzo
                    TIME_FORMAT(m.hora_salida, '%H:%i:%s') as hora_salida,
                    m.horas_trabajadas, m.tiempo_faltante, m.fecha_importacion,
-                   m.todas_marcaciones,
+                   $campoTodasMarcaciones
                    f.nombre, f.apellido,
                    j.id_jornada, j.hora_desde as jornada_hora_desde, 
                    j.hora_hasta as jornada_hora_hasta, j.horas_totales as jornada_horas_totales,
@@ -1271,7 +1295,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .btn-fun-extra.activo {
-    background: #28a745;
+    background: #1e7e34;
     color: white;
     border-color: #1e7e34;
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
@@ -1406,8 +1430,9 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Si se marcó como EX/Funcionario, recargar la página (el funcionario ya no existe en funcionarios)
-                if (valor === 'EX/Funcionario') {
+                // Si se marcó como EX/Funcionario, Préstamo, Lic. Sueldo o Lic. Sin Sueldo, recargar la página (el funcionario ya no existe en funcionarios)
+                const valoresQueMuevenAEx = ['EX/Funcionario', 'Préstamo', 'Lic. Sueldo', 'Lic. Sin Sueldo'];
+                if (valoresQueMuevenAEx.includes(valor)) {
                     alert('Funcionario movido a ex-funcionarios. La página se recargará.');
                     window.location.reload();
                 }

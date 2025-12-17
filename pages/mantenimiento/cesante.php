@@ -123,9 +123,9 @@ function iconoOrdenamiento($campo) {
 
 <div class="page-content">
     <div class="info-section" style="margin-bottom: 2rem; padding: 1rem; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
-        <p><strong>Nota:</strong> Esta sección muestra ex-funcionarios que han sido cesados. 
-        Una vez que un funcionario es marcado como "cesante" en la <a href="<?php echo BASE_URL; ?>/pages/funcionarios/listar.php">Lista de Funcionarios</a>, 
-        sus datos se mueven automáticamente a esta tabla y ya no aparecen en el listado de funcionarios activos. Esta acción no se puede revertir.</p>
+        <p><strong>Nota:</strong> Esta sección muestra ex-funcionarios que han sido movidos desde la lista de funcionarios activos. 
+        Los funcionarios se mueven automáticamente cuando se marca su estado como "EX/Funcionario", "Préstamo", "Lic. Sueldo" o "Lic. Sin Sueldo" en la <a href="<?php echo BASE_URL; ?>/pages/funcionarios/listar.php">Lista de Funcionarios</a>. 
+        Puedes reintegrarlos a funcionarios activos usando el botón verde de reintegro.</p>
     </div>
     
     <!-- Búsqueda -->
@@ -197,6 +197,7 @@ function iconoOrdenamiento($campo) {
                         <th>Sede/Provincia</th>
                         <th>Dirección</th>
                         <th>Especial</th>
+                        <th>Estado</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
@@ -223,12 +224,26 @@ function iconoOrdenamiento($campo) {
                                 <span style="color: #999;">No</span>
                             <?php endif; ?>
                         </td>
+                        <td style="text-align: center;">
+                            <?php 
+                            $estadoFunExtra = $func['fun_extra'] ?? 'EX/Funcionario';
+                            ?>
+                            <span style="background-color: #1e7e34; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem; font-weight: bold;">
+                                <?php echo htmlspecialchars($estadoFunExtra); ?>
+                            </span>
+                        </td>
                         <td style="white-space: nowrap; display: flex; align-items: center; gap: 4px;">
                             <a href="<?php echo BASE_URL; ?>/pages/marcaciones/listar.php?cedula=<?php echo urlencode($func['cedula']); ?>&ex_funcionario=1" 
                                class="btn btn-info btn-action-icon" 
                                title="Ver Marcaciones">
                                 <i class="fas fa-stopwatch"></i>
                             </a>
+                            <button onclick="reintegrarFuncionario('<?php echo htmlspecialchars($func['cedula'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($func['nombre'] ?? '', ENT_QUOTES); ?> <?php echo htmlspecialchars($func['apellido'] ?? '', ENT_QUOTES); ?>')" 
+                                    class="btn btn-success btn-action-icon" 
+                                    title="Reintegrar a Funcionarios Activos"
+                                    style="background-color: #28a745 !important; border-color: #28a745 !important; color: white !important;">
+                                <i class="fas fa-undo"></i>
+                            </button>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -238,4 +253,44 @@ function iconoOrdenamiento($campo) {
         <?php endif; ?>
     </div>
 </div>
+
+<script>
+function reintegrarFuncionario(cedula, nombre) {
+    if (!confirm('¿Estás seguro de que deseas reintegrar a "' + nombre + '" (Cédula: ' + cedula + ') a la lista de funcionarios activos?\n\nEsta acción moverá todos sus datos de ex_funcionarios a funcionarios.')) {
+        return;
+    }
+    
+    // Mostrar indicador de carga
+    const btn = event.target.closest('button');
+    const iconoOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    
+    fetch('<?php echo BASE_URL; ?>/pages/mantenimiento/reintegrar_ex_funcionario.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cedula: cedula })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✓ ' + data.message);
+            // Recargar la página para actualizar la lista
+            window.location.reload();
+        } else {
+            alert('✗ Error: ' + data.message);
+            btn.disabled = false;
+            btn.innerHTML = iconoOriginal;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('✗ Error al procesar la solicitud. Por favor, intenta de nuevo.');
+        btn.disabled = false;
+        btn.innerHTML = iconoOriginal;
+    });
+}
+</script>
 

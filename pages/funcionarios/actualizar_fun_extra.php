@@ -96,8 +96,9 @@ try {
         exit();
     }
     
-    // Si se está marcando como "Cesante", mover a ex_funcionarios y ex_marcaciones
-    if ($fun_extra === 'Cesante') {
+    // Si se está marcando como "EX/Funcionario", "Préstamo", "Lic. Sueldo" o "Lic. Sin Sueldo", mover a ex_funcionarios y ex_marcaciones
+    $valoresQueMuevenAEx = ['EX/Funcionario', 'Préstamo', 'Lic. Sueldo', 'Lic. Sin Sueldo'];
+    if (in_array($fun_extra, $valoresQueMuevenAEx)) {
         // Iniciar transacción
         $db->beginTransaction();
         
@@ -139,7 +140,7 @@ try {
                 $datosFuncionario['sede_provincia'],
                 $datosFuncionario['Direccion'],
                 $datosFuncionario['fun_horario_especial'] ?? 0,
-                'EX/Funcionario' // Marcar como EX/Funcionario en ex_funcionarios
+                $fun_extra // Mantener el valor original (EX/Funcionario, Préstamo, Lic. Sueldo, Lic. Sin Sueldo)
             ]);
             
             // 4. Obtener todas las marcaciones del funcionario
@@ -147,25 +148,62 @@ try {
             $stmtMarcaciones->execute([$cedula]);
             $marcaciones = $stmtMarcaciones->fetchAll(PDO::FETCH_ASSOC);
             
-            // 5. Insertar marcaciones en ex_marcaciones
+            // 5. Insertar marcaciones en ex_marcaciones (incluyendo campos opcionales si existen)
             if (count($marcaciones) > 0) {
-                $stmtInsertMarcaciones = $db->prepare("
-                    INSERT INTO ex_marcaciones (
-                        cedula, fecha, hora_entrada, hora_salida, 
-                        horas_trabajadas, tiempo_faltante, fecha_importacion
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                // Verificar qué columnas tiene la tabla ex_marcaciones usando INFORMATION_SCHEMA
+                $stmtColumns = $db->query("
+                    SELECT COLUMN_NAME 
+                    FROM INFORMATION_SCHEMA.COLUMNS 
+                    WHERE TABLE_SCHEMA = DATABASE() 
+                    AND TABLE_NAME = 'ex_marcaciones' 
+                    AND COLUMN_NAME IN ('almuerzo_salida', 'almuerzo_entrada', 'todas_marcaciones')
                 ");
+                $existingColumns = $stmtColumns->fetchAll(PDO::FETCH_COLUMN);
+                $tieneAlmuerzo = in_array('almuerzo_entrada', $existingColumns) && in_array('almuerzo_salida', $existingColumns);
+                $tieneTodasMarcaciones = in_array('todas_marcaciones', $existingColumns);
                 
-                foreach ($marcaciones as $marcacion) {
-                    $stmtInsertMarcaciones->execute([
-                        $marcacion['cedula'],
-                        $marcacion['fecha'],
-                        $marcacion['hora_entrada'],
-                        $marcacion['hora_salida'],
-                        $marcacion['horas_trabajadas'],
-                        $marcacion['tiempo_faltante'],
-                        $marcacion['fecha_importacion']
-                    ]);
+                if ($tieneAlmuerzo && $tieneTodasMarcaciones) {
+                    $stmtInsertMarcaciones = $db->prepare("
+                        INSERT INTO ex_marcaciones (
+                            cedula, fecha, hora_entrada, almuerzo_salida, almuerzo_entrada, hora_salida,
+                            todas_marcaciones, horas_trabajadas, tiempo_faltante, fecha_importacion
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    
+                    foreach ($marcaciones as $marcacion) {
+                        $stmtInsertMarcaciones->execute([
+                            $marcacion['cedula'],
+                            $marcacion['fecha'],
+                            $marcacion['hora_entrada'],
+                            $marcacion['almuerzo_salida'] ?? null,
+                            $marcacion['almuerzo_entrada'] ?? null,
+                            $marcacion['hora_salida'],
+                            $marcacion['todas_marcaciones'] ?? null,
+                            $marcacion['horas_trabajadas'],
+                            $marcacion['tiempo_faltante'],
+                            $marcacion['fecha_importacion']
+                        ]);
+                    }
+                } else {
+                    // Versión sin campos opcionales (compatibilidad con tablas antiguas)
+                    $stmtInsertMarcaciones = $db->prepare("
+                        INSERT INTO ex_marcaciones (
+                            cedula, fecha, hora_entrada, hora_salida, 
+                            horas_trabajadas, tiempo_faltante, fecha_importacion
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    
+                    foreach ($marcaciones as $marcacion) {
+                        $stmtInsertMarcaciones->execute([
+                            $marcacion['cedula'],
+                            $marcacion['fecha'],
+                            $marcacion['hora_entrada'],
+                            $marcacion['hora_salida'],
+                            $marcacion['horas_trabajadas'],
+                            $marcacion['tiempo_faltante'],
+                            $marcacion['fecha_importacion']
+                        ]);
+                    }
                 }
             }
             
