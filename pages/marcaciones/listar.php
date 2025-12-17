@@ -270,66 +270,27 @@ try {
             
             // Verificar si hay jornada extraordinaria aprobada para esta fecha
             $tieneJornadaExtra = !empty($marcacion['id_jornada']);
-            
-            // Calcular horas contabilizadas
-            if ($tieneJornadaExtra) {
-                // Si hay jornada extraordinaria aprobada, usar las horas reales del reloj (sin límite del horario regular)
-                $entrada = DateTime::createFromFormat('H:i:s', $marcacion['hora_entrada']);
-                if (!$entrada) {
-                    $entrada = DateTime::createFromFormat('H:i', $marcacion['hora_entrada']);
-                }
+
+            // Calcular horas contabilizadas - TODOS los días usan la misma lógica (limitada al horario regular)
+            $resultado = calcularHorasTrabajadas($marcacion['hora_entrada'], $marcacion['hora_salida'], $hEntradaMarc, $hSalidaMarc);
+            if ($resultado) {
+                $marcacion['horas_contabilizadas'] = $resultado['horas_contabilizadas'];
+                $marcacion['tiempo_faltante_calc'] = $resultado['tiempo_faltante'];
                 
-                $salida = DateTime::createFromFormat('H:i:s', $marcacion['hora_salida']);
-                if (!$salida) {
-                    $salida = DateTime::createFromFormat('H:i', $marcacion['hora_salida']);
-                }
+                // Sumar minutos contabilizados
+                $partes = explode(':', $resultado['horas_contabilizadas']);
+                $horasCont = (int)($partes[0] ?? 0);
+                $minutosCont = (int)($partes[1] ?? 0);
+                $totalHorasContabilizadas += ($horasCont * 60) + $minutosCont;
                 
-                if ($entrada && $salida) {
-                    // Calcular diferencia en minutos (horas reales del reloj)
-                    $minutosEntrada = $entrada->format('H') * 60 + $entrada->format('i');
-                    $minutosSalida = $salida->format('H') * 60 + $salida->format('i');
-                    $minutosTrabajados = $minutosSalida - $minutosEntrada;
-                    
-                    if ($minutosTrabajados > 0) {
-                        // Convertir a formato HH:MM:SS
-                        $horas = floor($minutosTrabajados / 60);
-                        $minutos = $minutosTrabajados % 60;
-                        $marcacion['horas_contabilizadas'] = sprintf('%02d:%02d:00', $horas, $minutos);
-                        $marcacion['tiempo_faltante_calc'] = '00:00:00'; // No hay tiempo faltante con jornada extraordinaria
-                        
-                        // Sumar minutos contabilizados a total
-                        $totalHorasContabilizadas += ($horas * 60) + $minutos;
-                        // No sumar tardanzas para jornada extraordinaria
-                    } else {
-                        $marcacion['horas_contabilizadas'] = '00:00:00';
-                        $marcacion['tiempo_faltante_calc'] = '00:00:00';
-                    }
-                } else {
-                    $marcacion['horas_contabilizadas'] = '00:00:00';
-                    $marcacion['tiempo_faltante_calc'] = '00:00:00';
-                }
+                // Sumar minutos de tardanza
+                $partesTard = explode(':', $resultado['tiempo_faltante']);
+                $horasTard = (int)($partesTard[0] ?? 0);
+                $minutosTard = (int)($partesTard[1] ?? 0);
+                $totalTardanzasMinutos += ($horasTard * 60) + $minutosTard;
             } else {
-                // Sin jornada extraordinaria: usar lógica normal (limitada al horario del funcionario)
-                $resultado = calcularHorasTrabajadas($marcacion['hora_entrada'], $marcacion['hora_salida'], $hEntradaMarc, $hSalidaMarc);
-                if ($resultado) {
-                    $marcacion['horas_contabilizadas'] = $resultado['horas_contabilizadas'];
-                    $marcacion['tiempo_faltante_calc'] = $resultado['tiempo_faltante'];
-                    
-                    // Sumar minutos contabilizados
-                    $partes = explode(':', $resultado['horas_contabilizadas']);
-                    $horasCont = (int)($partes[0] ?? 0);
-                    $minutosCont = (int)($partes[1] ?? 0);
-                    $totalHorasContabilizadas += ($horasCont * 60) + $minutosCont;
-                    
-                    // Sumar minutos de tardanza
-                    $partesTard = explode(':', $resultado['tiempo_faltante']);
-                    $horasTard = (int)($partesTard[0] ?? 0);
-                    $minutosTard = (int)($partesTard[1] ?? 0);
-                    $totalTardanzasMinutos += ($horasTard * 60) + $minutosTard;
-                } else {
-                    $marcacion['horas_contabilizadas'] = '00:00:00';
-                    $marcacion['tiempo_faltante_calc'] = '00:00:00';
-                }
+                $marcacion['horas_contabilizadas'] = '00:00:00';
+                $marcacion['tiempo_faltante_calc'] = '00:00:00';
             }
         } else {
             $marcacion['horas_contabilizadas'] = '00:00:00';
@@ -710,7 +671,7 @@ include __DIR__ . '/../../includes/header.php';
                         </a>
                     </th>
                     <th style="padding: 0.5rem 0.75rem; text-align: center; border: 1px solid #dee2e6;">
-                        Horas/Trabajo
+                        Horas Trabajadas
                     </th>
                     <th style="padding: 0.5rem 0.75rem; text-align: center; border: 1px solid #dee2e6;">
                         Horas Dia.
@@ -954,38 +915,47 @@ include __DIR__ . '/../../includes/header.php';
                             }
                             ?>
                         </td>
-                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php echo $tieneJornadaExtra ? 'background-color: #2196F3 !important; color: white !important;' : 'background-color: #fff3cd; color: #856404;'; ?> font-weight: bold;">
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php 
+                            if ($tieneJornadaExtra) {
+                                echo 'background-color: #1565C0 !important; color: white !important;';
+                            } else {
+                                echo 'background-color: #fff3cd; color: #856404;';
+                            }
+                        ?> font-weight: bold;">
                             <?php 
-                            // Calcular horas reales directamente desde hora_entrada y hora_salida del reloj biométrico (sin filtros)
-                            if (!empty($marcacion['hora_entrada']) && !empty($marcacion['hora_salida'])) {
-                                $entrada = DateTime::createFromFormat('H:i:s', $marcacion['hora_entrada']);
-                                if (!$entrada) {
-                                    $entrada = DateTime::createFromFormat('H:i', $marcacion['hora_entrada']);
-                                }
+                            if ($tieneJornadaExtra && !empty($marcacion['jornada_horas_totales'])) {
+                                // Hay jornada extraordinaria aprobada
+                                $horasTotalesExtra = $marcacion['jornada_horas_totales'] ?? '00:00:00';
+                                $partesExtra = explode(':', $horasTotalesExtra);
+                                $horasExtra = (int)($partesExtra[0] ?? 0);
+                                $minutosExtra = (int)($partesExtra[1] ?? 0);
+                                $minutosTotalesExtra = ($horasExtra * 60) + $minutosExtra;
                                 
-                                $salida = DateTime::createFromFormat('H:i:s', $marcacion['hora_salida']);
-                                if (!$salida) {
-                                    $salida = DateTime::createFromFormat('H:i', $marcacion['hora_salida']);
-                                }
-                                
-                                if ($entrada && $salida) {
-                                    // Calcular diferencia directa en minutos (sin filtros)
-                                    $minutosEntrada = $entrada->format('H') * 60 + $entrada->format('i');
-                                    $minutosSalida = $salida->format('H') * 60 + $salida->format('i');
-                                    $minutosTrabajados = $minutosSalida - $minutosEntrada;
+                                // Verificar si hay marcaciones biométricas (horas contabilizadas)
+                                if (!empty($marcacion['horas_contabilizadas']) && $marcacion['horas_contabilizadas'] !== '00:00:00') {
+                                    // Con marcaciones biométricas: sumar horas normales (limitadas al horario) + horas extraordinarias aprobadas
+                                    $partesNormales = explode(':', $marcacion['horas_contabilizadas']);
+                                    $horasNormales = (int)($partesNormales[0] ?? 0);
+                                    $minutosNormales = (int)($partesNormales[1] ?? 0);
+                                    $minutosTotalesNormales = ($horasNormales * 60) + $minutosNormales;
                                     
-                                    if ($minutosTrabajados > 0) {
-                                        $horas = floor($minutosTrabajados / 60);
-                                        $minutos = $minutosTrabajados % 60;
-                                        echo sprintf('%d:%02d', $horas, $minutos);
-                                    } else {
-                                        echo '<span style="color: #856404;">-</span>';
-                                    }
+                                    // Sumar total
+                                    $minutosTotales = $minutosTotalesNormales + $minutosTotalesExtra;
+                                    $horasFinales = floor($minutosTotales / 60);
+                                    $minutosFinales = $minutosTotales % 60;
+                                    echo sprintf('%d:%02d', $horasFinales, $minutosFinales);
+                                } else {
+                                    // Sin marcaciones biométricas: mostrar solo las horas extraordinarias aprobadas
+                                    echo sprintf('%d:%02d', $horasExtra, $minutosExtra);
+                                }
+                            } else {
+                                // Sin jornada extraordinaria: mostrar horas contabilizadas normales
+                                if (isset($marcacion['horas_contabilizadas']) && $marcacion['horas_contabilizadas'] !== '00:00:00') {
+                                    $partes = explode(':', $marcacion['horas_contabilizadas']);
+                                    echo sprintf('%d:%02d', (int)($partes[0] ?? 0), (int)($partes[1] ?? 0));
                                 } else {
                                     echo '<span style="color: #856404;">-</span>';
                                 }
-                            } else {
-                                echo '<span style="color: #856404;">-</span>';
                             }
                             ?>
                         </td>
@@ -1025,7 +995,7 @@ include __DIR__ . '/../../includes/header.php';
             <strong>Total de registros:</strong> <strong><?php echo $totalRegistros; ?></strong>
         </div>
         <div>
-            <strong>Total Horas/Trabajo:</strong> 
+            <strong>Total Horas Trabajadas:</strong> 
             <span style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem;">
                 <?php 
                 // Mostrar el valor formateado (ya viene en formato HH:MM:SS)
@@ -1591,7 +1561,6 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
                 <th>Hora Desde</th>
                 <th>Hora Hasta</th>
                 <th>Horas/J.Extra.</th>
-                <th>Horas Trabajadas</th>
                 <th>Justificación</th>
                 <th>Estado</th>
             </tr>
@@ -1635,41 +1604,6 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
                         ?>
                     </td>
                     <td><strong><?php echo $jornada['horas_totales'] ?? '-'; ?></strong></td>
-                    <td>
-                        <?php 
-                        // Calcular horas trabajadas desde marcación biométrica (Horas Dia.)
-                        if (!empty($jornada['hora_entrada_marcacion']) && !empty($jornada['hora_salida_marcacion'])) {
-                            $entrada = DateTime::createFromFormat('H:i:s', $jornada['hora_entrada_marcacion']);
-                            if (!$entrada) {
-                                $entrada = DateTime::createFromFormat('H:i', $jornada['hora_entrada_marcacion']);
-                            }
-                            
-                            $salida = DateTime::createFromFormat('H:i:s', $jornada['hora_salida_marcacion']);
-                            if (!$salida) {
-                                $salida = DateTime::createFromFormat('H:i', $jornada['hora_salida_marcacion']);
-                            }
-                            
-                            if ($entrada && $salida) {
-                                // Calcular diferencia directa en minutos (sin filtros de almuerzo)
-                                $minutosEntrada = $entrada->format('H') * 60 + $entrada->format('i');
-                                $minutosSalida = $salida->format('H') * 60 + $salida->format('i');
-                                $minutosTrabajados = $minutosSalida - $minutosEntrada;
-                                
-                                if ($minutosTrabajados > 0) {
-                                    $horas = floor($minutosTrabajados / 60);
-                                    $minutos = $minutosTrabajados % 60;
-                                    echo sprintf('%d:%02d', $horas, $minutos);
-                                } else {
-                                    echo '-';
-                                }
-                            } else {
-                                echo '-';
-                            }
-                        } else {
-                            echo '-';
-                        }
-                        ?>
-                    </td>
                     <td><?php echo htmlspecialchars(substr($jornada['justificacion'], 0, 50)); ?><?php echo strlen($jornada['justificacion']) > 50 ? '...' : ''; ?></td>
                     <td>
                         <?php if ($jornada['tiene_marcacion']): ?>
