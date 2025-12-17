@@ -265,8 +265,15 @@ try {
                 }
             }
             
-            // Guardar horario de entrada en la marcación para usarlo después en la visualización
+            // Guardar horario de entrada y salida en la marcación para usarlo después en la visualización
             $marcacion['h_entrada_func'] = $hEntradaMarc;
+            if ($hSalidaMarc) {
+                $hSalidaMarc = trim($hSalidaMarc);
+                if (strlen($hSalidaMarc) == 5) {
+                    $hSalidaMarc .= ':00';
+                }
+            }
+            $marcacion['h_salida_func'] = $hSalidaMarc;
             
             // Verificar si hay jornada extraordinaria aprobada para esta fecha
             $tieneJornadaExtra = !empty($marcacion['id_jornada']);
@@ -710,7 +717,7 @@ include __DIR__ . '/../../includes/header.php';
                         </a>
                     </th>
                     <th style="padding: 0.5rem 0.75rem; text-align: center; border: 1px solid #dee2e6;">
-                        Horas/Trabajo
+                        Horas Trabajadas
                     </th>
                     <th style="padding: 0.5rem 0.75rem; text-align: center; border: 1px solid #dee2e6;">
                         Horas Dia.
@@ -954,35 +961,225 @@ include __DIR__ . '/../../includes/header.php';
                             }
                             ?>
                         </td>
-                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php echo $tieneJornadaExtra ? 'background-color: #2196F3 !important; color: white !important;' : 'background-color: #fff3cd; color: #856404;'; ?> font-weight: bold;">
+                        <td style="padding: 0.5rem 0.75rem; border: 1px solid #dee2e6; text-align: center; <?php echo $tieneJornadaExtra ? 'background-color: #2196F3 !important; color: white !important;' : 'background-color: #fff3cd; color: #856404;'; ?> font-weight: bold;" valign="top">
                             <?php 
-                            // Calcular horas reales directamente desde hora_entrada y hora_salida del reloj biométrico (sin filtros)
+                            // Calcular horas trabajadas según si hay jornada extraordinaria o no
                             if (!empty($marcacion['hora_entrada']) && !empty($marcacion['hora_salida'])) {
-                                $entrada = DateTime::createFromFormat('H:i:s', $marcacion['hora_entrada']);
-                                if (!$entrada) {
-                                    $entrada = DateTime::createFromFormat('H:i', $marcacion['hora_entrada']);
-                                }
+                                // #region agent log
+                                $logFile = __DIR__ . '/../../.cursor/debug.log';
+                                $logEntry = json_encode([
+                                    'sessionId' => 'debug-session',
+                                    'runId' => 'run1',
+                                    'hypothesisId' => 'A',
+                                    'location' => 'listar.php:918',
+                                    'message' => 'Calculando Horas/Trabajo',
+                                    'data' => [
+                                        'id_marcacion' => $marcacion['id_marcacion'],
+                                        'tieneJornadaExtra' => $tieneJornadaExtra,
+                                        'hora_entrada' => $marcacion['hora_entrada'],
+                                        'hora_salida' => $marcacion['hora_salida'],
+                                        'h_entrada_func' => $marcacion['h_entrada_func'] ?? null,
+                                        'h_salida_func' => $marcacion['h_salida_func'] ?? null
+                                    ],
+                                    'timestamp' => time() * 1000
+                                ]) . "\n";
+                                file_put_contents($logFile, $logEntry, FILE_APPEND);
+                                // #endregion agent log
                                 
-                                $salida = DateTime::createFromFormat('H:i:s', $marcacion['hora_salida']);
-                                if (!$salida) {
-                                    $salida = DateTime::createFromFormat('H:i', $marcacion['hora_salida']);
-                                }
-                                
-                                if ($entrada && $salida) {
-                                    // Calcular diferencia directa en minutos (sin filtros)
-                                    $minutosEntrada = $entrada->format('H') * 60 + $entrada->format('i');
-                                    $minutosSalida = $salida->format('H') * 60 + $salida->format('i');
-                                    $minutosTrabajados = $minutosSalida - $minutosEntrada;
+                                if ($tieneJornadaExtra) {
+                                    // CON jornada extraordinaria: verificar si se superpone con horario regular
+                                    $hEntradaFunc = !empty($marcacion['h_entrada_func']) ? trim($marcacion['h_entrada_func']) : null;
+                                    $hSalidaFunc = !empty($marcacion['h_salida_func']) ? trim($marcacion['h_salida_func']) : null;
                                     
-                                    if ($minutosTrabajados > 0) {
-                                        $horas = floor($minutosTrabajados / 60);
-                                        $minutos = $minutosTrabajados % 60;
+                                    // Normalizar formato del horario
+                                    if ($hEntradaFunc && strlen($hEntradaFunc) == 5) {
+                                        $hEntradaFunc .= ':00';
+                                    }
+                                    if ($hSalidaFunc && strlen($hSalidaFunc) == 5) {
+                                        $hSalidaFunc .= ':00';
+                                    }
+                                    
+                                    // Verificar si la jornada extraordinaria se superpone con el horario regular
+                                    $seSuperponen = false;
+                                    if ($hEntradaFunc && $hSalidaFunc && !empty($marcacion['jornada_hora_desde']) && !empty($marcacion['jornada_hora_hasta'])) {
+                                        $horaDesdeExtra = trim($marcacion['jornada_hora_desde']);
+                                        $horaHastaExtra = trim($marcacion['jornada_hora_hasta']);
+                                        if (strlen($horaDesdeExtra) == 5) {
+                                            $horaDesdeExtra .= ':00';
+                                        }
+                                        if (strlen($horaHastaExtra) == 5) {
+                                            $horaHastaExtra .= ':00';
+                                        }
+                                        
+                                        $seSuperponen = rangosTiempoSeSuperponen(
+                                            $hEntradaFunc,
+                                            $hSalidaFunc,
+                                            $horaDesdeExtra,
+                                            $horaHastaExtra
+                                        );
+                                    }
+                                    
+                                    // #region agent log
+                                    $logEntry = json_encode([
+                                        'sessionId' => 'debug-session',
+                                        'runId' => 'run1',
+                                        'hypothesisId' => 'B',
+                                        'location' => 'listar.php:965',
+                                        'message' => 'Verificacion superposicion',
+                                        'data' => [
+                                            'id_marcacion' => $marcacion['id_marcacion'],
+                                            'seSuperponen' => $seSuperponen,
+                                            'hEntradaFunc' => $hEntradaFunc,
+                                            'hSalidaFunc' => $hSalidaFunc,
+                                            'horaDesdeExtra' => $horaDesdeExtra ?? null,
+                                            'horaHastaExtra' => $horaHastaExtra ?? null
+                                        ],
+                                        'timestamp' => time() * 1000
+                                    ]) . "\n";
+                                    file_put_contents($logFile, $logEntry, FILE_APPEND);
+                                    // #endregion agent log
+                                    
+                                    if (!$seSuperponen && !empty($hEntradaFunc) && !empty($hSalidaFunc)) {
+                                        // NO se superponen: Sumar horas normales (limitadas al horario regular) + horas aprobadas
+                                        $resultadoHorasNormales = calcularHorasTrabajadas(
+                                            $marcacion['hora_entrada'], 
+                                            $marcacion['hora_salida'], 
+                                            $hEntradaFunc, 
+                                            $hSalidaFunc
+                                        );
+                                        
+                                        // #region agent log
+                                        $logEntry = json_encode([
+                                            'sessionId' => 'debug-session',
+                                            'runId' => 'run1',
+                                            'hypothesisId' => 'C',
+                                            'location' => 'listar.php:985',
+                                            'message' => 'Calculo horas normales',
+                                            'data' => [
+                                                'id_marcacion' => $marcacion['id_marcacion'],
+                                                'horas_contabilizadas' => $resultadoHorasNormales ? $resultadoHorasNormales['horas_contabilizadas'] : null,
+                                                'jornada_horas_totales' => $marcacion['jornada_horas_totales'] ?? null
+                                            ],
+                                            'timestamp' => time() * 1000
+                                        ]) . "\n";
+                                        file_put_contents($logFile, $logEntry, FILE_APPEND);
+                                        // #endregion agent log
+                                        
+                                        if ($resultadoHorasNormales && $resultadoHorasNormales['horas_contabilizadas'] !== '00:00:00') {
+                                            $partesNormales = explode(':', $resultadoHorasNormales['horas_contabilizadas']);
+                                            $horasNormales = (int)($partesNormales[0] ?? 0);
+                                            $minutosNormales = (int)($partesNormales[1] ?? 0);
+                                            $minutosTotalesNormales = ($horasNormales * 60) + $minutosNormales;
+                                            
+                                            $horasTotalesExtra = $marcacion['jornada_horas_totales'] ?? '00:00:00';
+                                            $partesExtra = explode(':', $horasTotalesExtra);
+                                            $horasExtra = (int)($partesExtra[0] ?? 0);
+                                            $minutosExtra = (int)($partesExtra[1] ?? 0);
+                                            $minutosTotalesExtra = ($horasExtra * 60) + $minutosExtra;
+                                            
+                                            $minutosTotalesTrabajados = $minutosTotalesNormales + $minutosTotalesExtra;
+                                            
+                                            // #region agent log
+                                            $logEntry = json_encode([
+                                                'sessionId' => 'debug-session',
+                                                'runId' => 'run1',
+                                                'hypothesisId' => 'D',
+                                                'location' => 'listar.php:1007',
+                                                'message' => 'Suma final',
+                                                'data' => [
+                                                    'id_marcacion' => $marcacion['id_marcacion'],
+                                                    'minutosTotalesNormales' => $minutosTotalesNormales,
+                                                    'minutosTotalesExtra' => $minutosTotalesExtra,
+                                                    'minutosTotalesTrabajados' => $minutosTotalesTrabajados
+                                                ],
+                                                'timestamp' => time() * 1000
+                                            ]) . "\n";
+                                            file_put_contents($logFile, $logEntry, FILE_APPEND);
+                                            // #endregion agent log
+                                            
+                                            if ($minutosTotalesTrabajados > 0) {
+                                                $horasFinales = floor($minutosTotalesTrabajados / 60);
+                                                $minutosFinales = $minutosTotalesTrabajados % 60;
+                                                echo sprintf('%d:%02d', $horasFinales, $minutosFinales);
+                                            } else {
+                                                echo '<span style="color: #856404;">-</span>';
+                                            }
+                                        } else {
+                                            // Si no hay horas normales, mostrar solo horas aprobadas
+                                            $horasTotalesExtra = $marcacion['jornada_horas_totales'] ?? '00:00:00';
+                                            $partesExtra = explode(':', $horasTotalesExtra);
+                                            $horasExtra = (int)($partesExtra[0] ?? 0);
+                                            $minutosExtra = (int)($partesExtra[1] ?? 0);
+                                            if ($horasExtra > 0 || $minutosExtra > 0) {
+                                                echo sprintf('%d:%02d', $horasExtra, $minutosExtra);
+                                            } else {
+                                                echo '<span style="color: #856404;">-</span>';
+                                            }
+                                        }
+                                    } else {
+                                        // Se superponen: Mostrar horas reales del biométrico
+                                        $entrada = DateTime::createFromFormat('H:i:s', $marcacion['hora_entrada']);
+                                        if (!$entrada) {
+                                            $entrada = DateTime::createFromFormat('H:i', $marcacion['hora_entrada']);
+                                        }
+                                        
+                                        $salida = DateTime::createFromFormat('H:i:s', $marcacion['hora_salida']);
+                                        if (!$salida) {
+                                            $salida = DateTime::createFromFormat('H:i', $marcacion['hora_salida']);
+                                        }
+                                        
+                                        if ($entrada && $salida) {
+                                            $minutosEntrada = $entrada->format('H') * 60 + $entrada->format('i');
+                                            $minutosSalida = $salida->format('H') * 60 + $salida->format('i');
+                                            $minutosTrabajados = $minutosSalida - $minutosEntrada;
+                                            
+                                            if ($minutosTrabajados > 0) {
+                                                $horas = floor($minutosTrabajados / 60);
+                                                $minutos = $minutosTrabajados % 60;
+                                                echo sprintf('%d:%02d', $horas, $minutos);
+                                            } else {
+                                                echo '<span style="color: #856404;">-</span>';
+                                            }
+                                        } else {
+                                            echo '<span style="color: #856404;">-</span>';
+                                        }
+                                    }
+                                } else {
+                                    // SIN jornada extraordinaria: usar calcularHorasTrabajadas() limitado al horario regular
+                                    $hEntradaFunc = !empty($marcacion['h_entrada_func']) ? $marcacion['h_entrada_func'] : null;
+                                    $hSalidaFunc = !empty($marcacion['h_salida_func']) ? $marcacion['h_salida_func'] : null;
+                                    
+                                    $resultado = calcularHorasTrabajadas(
+                                        $marcacion['hora_entrada'], 
+                                        $marcacion['hora_salida'], 
+                                        $hEntradaFunc, 
+                                        $hSalidaFunc
+                                    );
+                                    
+                                    // #region agent log
+                                    $logEntry = json_encode([
+                                        'sessionId' => 'debug-session',
+                                        'runId' => 'run1',
+                                        'hypothesisId' => 'E',
+                                        'location' => 'listar.php:1063',
+                                        'message' => 'Sin jornada extra - calculo',
+                                        'data' => [
+                                            'id_marcacion' => $marcacion['id_marcacion'],
+                                            'horas_contabilizadas' => $resultado ? $resultado['horas_contabilizadas'] : null
+                                        ],
+                                        'timestamp' => time() * 1000
+                                    ]) . "\n";
+                                    file_put_contents($logFile, $logEntry, FILE_APPEND);
+                                    // #endregion agent log
+                                    
+                                    if ($resultado && $resultado['horas_contabilizadas'] !== '00:00:00') {
+                                        $partes = explode(':', $resultado['horas_contabilizadas']);
+                                        $horas = (int)($partes[0] ?? 0);
+                                        $minutos = (int)($partes[1] ?? 0);
                                         echo sprintf('%d:%02d', $horas, $minutos);
                                     } else {
                                         echo '<span style="color: #856404;">-</span>';
                                     }
-                                } else {
-                                    echo '<span style="color: #856404;">-</span>';
                                 }
                             } else {
                                 echo '<span style="color: #856404;">-</span>';
@@ -1025,7 +1222,7 @@ include __DIR__ . '/../../includes/header.php';
             <strong>Total de registros:</strong> <strong><?php echo $totalRegistros; ?></strong>
         </div>
         <div>
-            <strong>Total Horas/Trabajo:</strong> 
+            <strong>Total Horas Trabajadas:</strong> 
             <span style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem;">
                 <?php 
                 // Mostrar el valor formateado (ya viene en formato HH:MM:SS)
@@ -1486,6 +1683,8 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
         $sqlJornadas = "SELECT j.id_jornada, j.cedula, j.fecha, j.hora_desde, j.hora_hasta, 
                                j.horas_totales, j.justificacion, j.fecha_registro,
                                f.nombre, f.apellido,
+                               TIME_FORMAT(f.h_entrada, '%H:%i:%s') as h_entrada_funcionario,
+                               TIME_FORMAT(f.h_salida, '%H:%i:%s') as h_salida_funcionario,
                                CASE WHEN m.id_marcacion IS NOT NULL THEN 1 ELSE 0 END as tiene_marcacion,
                                TIME_FORMAT(m.hora_entrada, '%H:%i:%s') as hora_entrada_marcacion,
                                TIME_FORMAT(m.hora_salida, '%H:%i:%s') as hora_salida_marcacion
@@ -1597,8 +1796,91 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
             </tr>
         </thead>
         <tbody>
-            <?php foreach ($jornadasExtraordinarias as $jornada): 
+            <?php foreach ($jornadasExtraordinarias as $jornada):
                 $claseFila = $jornada['tiene_marcacion'] ? 'jornada-con-marcacion' : 'jornada-sin-marcacion';
+                
+                // Obtener horario del funcionario si no está en el resultado del JOIN
+                $hEntradaFuncJornada = !empty($jornada['h_entrada_funcionario']) ? trim($jornada['h_entrada_funcionario']) : null;
+                $hSalidaFuncJornada = !empty($jornada['h_salida_funcionario']) ? trim($jornada['h_salida_funcionario']) : null;
+                
+                // #region agent log
+                $logFile = __DIR__ . '/../../.cursor/debug.log';
+                $logEntry = json_encode([
+                    'sessionId' => 'debug-session',
+                    'runId' => 'run1',
+                    'hypothesisId' => 'F',
+                    'location' => 'listar.php:1760',
+                    'message' => 'Obteniendo horario funcionario - antes de consulta',
+                    'data' => [
+                        'id_jornada' => $jornada['id_jornada'],
+                        'cedula' => $jornada['cedula'],
+                        'hEntradaFuncJornada_antes' => $hEntradaFuncJornada,
+                        'hSalidaFuncJornada_antes' => $hSalidaFuncJornada
+                    ],
+                    'timestamp' => time() * 1000
+                ]) . "\n";
+                file_put_contents($logFile, $logEntry, FILE_APPEND);
+                // #endregion agent log
+                
+                // Si no tenemos el horario del JOIN, intentar obtenerlo
+                if (empty($hEntradaFuncJornada) || empty($hSalidaFuncJornada)) {
+                    // Si estamos filtrados por cédula, usar el horario que ya se obtuvo al inicio
+                    if (!empty($cedulaFiltro) && !$exFuncionario && isset($hEntradaFunc) && isset($hSalidaFunc) && !empty($hEntradaFunc) && !empty($hSalidaFunc)) {
+                        $hEntradaFuncJornada = $hEntradaFunc;
+                        $hSalidaFuncJornada = $hSalidaFunc;
+                    } else {
+                        // Buscar el horario usando la misma lógica que en la tabla principal
+                        if (!empty($jornada['cedula'])) {
+                            $stmtHorarioJornada = $db->prepare("SELECT TIME_FORMAT(h_entrada, '%H:%i:%s') as h_entrada, TIME_FORMAT(h_salida, '%H:%i:%s') as h_salida FROM funcionarios WHERE cedula = ? LIMIT 1");
+                            $stmtHorarioJornada->execute([$jornada['cedula']]);
+                            $horarioJornada = $stmtHorarioJornada->fetch();
+                            
+                            // #region agent log
+                            $logEntry = json_encode([
+                                'sessionId' => 'debug-session',
+                                'runId' => 'run1',
+                                'hypothesisId' => 'G',
+                                'location' => 'listar.php:1787',
+                                'message' => 'Resultado consulta horario funcionario',
+                                'data' => [
+                                    'id_jornada' => $jornada['id_jornada'],
+                                    'cedula' => $jornada['cedula'],
+                                    'cedulaFiltro' => $cedulaFiltro ?? null,
+                                    'hEntradaFunc_global' => $hEntradaFunc ?? null,
+                                    'hSalidaFunc_global' => $hSalidaFunc ?? null,
+                                    'horarioJornada_fetch' => $horarioJornada !== false,
+                                    'horarioJornada' => $horarioJornada,
+                                    'h_entrada' => $horarioJornada ? ($horarioJornada['h_entrada'] ?? null) : null,
+                                    'h_salida' => $horarioJornada ? ($horarioJornada['h_salida'] ?? null) : null
+                                ],
+                                'timestamp' => time() * 1000
+                            ]) . "\n";
+                            file_put_contents($logFile, $logEntry, FILE_APPEND);
+                            // #endregion agent log
+                            
+                            if ($horarioJornada && !empty($horarioJornada['h_entrada']) && !empty($horarioJornada['h_salida'])) {
+                                $hEntradaFuncJornada = $horarioJornada['h_entrada'];
+                                $hSalidaFuncJornada = $horarioJornada['h_salida'];
+                            } else {
+                                // Si aún no encontramos, intentar buscar por la cédula normalizada
+                                // La cédula podría estar en formato diferente (con/sin guiones)
+                                $cedulaSinGuiones = str_replace('-', '', $jornada['cedula']);
+                                $stmtHorarioJornada2 = $db->prepare("SELECT TIME_FORMAT(h_entrada, '%H:%i:%s') as h_entrada, TIME_FORMAT(h_salida, '%H:%i:%s') as h_salida FROM funcionarios WHERE REPLACE(cedula, '-', '') = ? LIMIT 1");
+                                $stmtHorarioJornada2->execute([$cedulaSinGuiones]);
+                                $horarioJornada2 = $stmtHorarioJornada2->fetch();
+                                
+                                if ($horarioJornada2 && !empty($horarioJornada2['h_entrada']) && !empty($horarioJornada2['h_salida'])) {
+                                    $hEntradaFuncJornada = $horarioJornada2['h_entrada'];
+                                    $hSalidaFuncJornada = $horarioJornada2['h_salida'];
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Guardar en el array para usar después
+                $jornada['h_entrada_funcionario'] = $hEntradaFuncJornada;
+                $jornada['h_salida_funcionario'] = $hSalidaFuncJornada;
             ?>
                 <tr class="<?php echo $claseFila; ?>">
                     <?php if (empty($cedulaFiltro)): ?>
@@ -1606,6 +1888,7 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
                     <td><?php echo htmlspecialchars(($jornada['nombre'] ?? '') . ' ' . ($jornada['apellido'] ?? '')); ?></td>
                     <?php endif; ?>
                     <td><?php echo date('d/m/Y', strtotime($jornada['fecha'])); ?></td>
+<<<<<<< Updated upstream
                     <td>
                         <?php 
                         if ($jornada['hora_desde']) {
@@ -1634,36 +1917,284 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
                         }
                         ?>
                     </td>
+=======
+                    <td><?php 
+                        $horaDesde = DateTime::createFromFormat('H:i:s', $jornada['hora_desde']);
+                        if (!$horaDesde) {
+                            $horaDesde = DateTime::createFromFormat('H:i', $jornada['hora_desde']);
+                        }
+                        echo $horaDesde ? $horaDesde->format('g:i a') : $jornada['hora_desde'];
+                    ?></td>
+                    <td><?php 
+                        $horaHasta = DateTime::createFromFormat('H:i:s', $jornada['hora_hasta']);
+                        if (!$horaHasta) {
+                            $horaHasta = DateTime::createFromFormat('H:i', $jornada['hora_hasta']);
+                        }
+                        echo $horaHasta ? $horaHasta->format('g:i a') : $jornada['hora_hasta'];
+                    ?></td>
+>>>>>>> Stashed changes
                     <td><strong><?php echo $jornada['horas_totales'] ?? '-'; ?></strong></td>
                     <td>
                         <?php 
-                        // Calcular horas trabajadas desde marcación biométrica (Horas Dia.)
+                        // Buscar la marcación correspondiente en el array ya procesado para obtener horas_contabilizadas
+                        $marcacionCorrespondiente = null;
+                        foreach ($marcaciones as $marc) {
+                            if ($marc['cedula'] === $jornada['cedula'] && $marc['fecha'] === $jornada['fecha']) {
+                                $marcacionCorrespondiente = $marc;
+                                break;
+                            }
+                        }
+                        
+                        // Calcular horas trabajadas según si se superpone o no con horario regular
                         if (!empty($jornada['hora_entrada_marcacion']) && !empty($jornada['hora_salida_marcacion'])) {
-                            $entrada = DateTime::createFromFormat('H:i:s', $jornada['hora_entrada_marcacion']);
-                            if (!$entrada) {
-                                $entrada = DateTime::createFromFormat('H:i', $jornada['hora_entrada_marcacion']);
+                            // #region agent log
+                            $logFile = __DIR__ . '/../../.cursor/debug.log';
+                            $logEntry = json_encode([
+                                'sessionId' => 'debug-session',
+                                'runId' => 'run1',
+                                'hypothesisId' => 'A',
+                                'location' => 'listar.php:1770',
+                                'message' => 'Calculando Horas Trabajadas - Jornadas Extra',
+                                'data' => [
+                                    'id_jornada' => $jornada['id_jornada'],
+                                    'fecha' => $jornada['fecha'],
+                                    'hora_entrada_marcacion' => $jornada['hora_entrada_marcacion'],
+                                    'hora_salida_marcacion' => $jornada['hora_salida_marcacion'],
+                                    'h_entrada_funcionario' => $jornada['h_entrada_funcionario'] ?? null,
+                                    'h_salida_funcionario' => $jornada['h_salida_funcionario'] ?? null,
+                                    'hora_desde' => $jornada['hora_desde'] ?? null,
+                                    'hora_hasta' => $jornada['hora_hasta'] ?? null,
+                                    'horas_totales' => $jornada['horas_totales'] ?? null
+                                ],
+                                'timestamp' => time() * 1000
+                            ]) . "\n";
+                            file_put_contents($logFile, $logEntry, FILE_APPEND);
+                            // #endregion agent log
+                            
+                            // Obtener horario del funcionario (usar variables locales que ya obtuvimos)
+                            $hEntradaFunc = !empty($hEntradaFuncJornada) ? trim($hEntradaFuncJornada) : null;
+                            $hSalidaFunc = !empty($hSalidaFuncJornada) ? trim($hSalidaFuncJornada) : null;
+                            
+                            // #region agent log
+                            $logEntry = json_encode([
+                                'sessionId' => 'debug-session',
+                                'runId' => 'run1',
+                                'hypothesisId' => 'H',
+                                'location' => 'listar.php:1875',
+                                'message' => 'Variables locales antes de calcular',
+                                'data' => [
+                                    'id_jornada' => $jornada['id_jornada'],
+                                    'fecha' => $jornada['fecha'],
+                                    'hEntradaFuncJornada' => $hEntradaFuncJornada,
+                                    'hSalidaFuncJornada' => $hSalidaFuncJornada,
+                                    'hEntradaFunc' => $hEntradaFunc,
+                                    'hSalidaFunc' => $hSalidaFunc
+                                ],
+                                'timestamp' => time() * 1000
+                            ]) . "\n";
+                            file_put_contents($logFile, $logEntry, FILE_APPEND);
+                            // #endregion agent log
+                            
+                            // Normalizar formato del horario (asegurar formato HH:MM:SS)
+                            if ($hEntradaFunc && strlen($hEntradaFunc) == 5) {
+                                $hEntradaFunc .= ':00';
+                            }
+                            if ($hSalidaFunc && strlen($hSalidaFunc) == 5) {
+                                $hSalidaFunc .= ':00';
                             }
                             
-                            $salida = DateTime::createFromFormat('H:i:s', $jornada['hora_salida_marcacion']);
-                            if (!$salida) {
-                                $salida = DateTime::createFromFormat('H:i', $jornada['hora_salida_marcacion']);
-                            }
-                            
-                            if ($entrada && $salida) {
-                                // Calcular diferencia directa en minutos (sin filtros de almuerzo)
-                                $minutosEntrada = $entrada->format('H') * 60 + $entrada->format('i');
-                                $minutosSalida = $salida->format('H') * 60 + $salida->format('i');
-                                $minutosTrabajados = $minutosSalida - $minutosEntrada;
+                            // Verificar si la jornada extraordinaria se superpone con el horario regular
+                            $seSuperponen = false;
+                            $debugSuperpone = 'NO_HORARIO';
+                            if ($hEntradaFunc && $hSalidaFunc && !empty($jornada['hora_desde']) && !empty($jornada['hora_hasta'])) {
+                                // Normalizar formato de jornada extraordinaria
+                                $horaDesdeExtra = trim($jornada['hora_desde']);
+                                $horaHastaExtra = trim($jornada['hora_hasta']);
+                                if (strlen($horaDesdeExtra) == 5) {
+                                    $horaDesdeExtra .= ':00';
+                                }
+                                if (strlen($horaHastaExtra) == 5) {
+                                    $horaHastaExtra .= ':00';
+                                }
                                 
-                                if ($minutosTrabajados > 0) {
-                                    $horas = floor($minutosTrabajados / 60);
-                                    $minutos = $minutosTrabajados % 60;
-                                    echo sprintf('%d:%02d', $horas, $minutos);
+                                // Comparar rangos: horario regular vs jornada extraordinaria
+                                $seSuperponen = rangosTiempoSeSuperponen(
+                                    $hEntradaFunc,
+                                    $hSalidaFunc,
+                                    $horaDesdeExtra,
+                                    $horaHastaExtra
+                                );
+                                // DEBUG: Guardar valores para mostrar en el debug
+                                $debugSuperpone = $seSuperponen ? 'SI' : 'NO';
+                            }
+                            
+                            // #region agent log
+                            $logEntry = json_encode([
+                                'sessionId' => 'debug-session',
+                                'runId' => 'run1',
+                                'hypothesisId' => 'B',
+                                'location' => 'listar.php:1815',
+                                'message' => 'Verificacion superposicion - Jornadas Extra',
+                                'data' => [
+                                    'id_jornada' => $jornada['id_jornada'],
+                                    'fecha' => $jornada['fecha'],
+                                    'seSuperponen' => $seSuperponen,
+                                    'debugSuperpone' => $debugSuperpone,
+                                    'hEntradaFunc' => $hEntradaFunc,
+                                    'hSalidaFunc' => $hSalidaFunc,
+                                    'horaDesdeExtra' => $horaDesdeExtra ?? null,
+                                    'horaHastaExtra' => $horaHastaExtra ?? null
+                                ],
+                                'timestamp' => time() * 1000
+                            ]) . "\n";
+                            file_put_contents($logFile, $logEntry, FILE_APPEND);
+                            // #endregion agent log
+                            
+                            // Verificar si NO se superponen
+                            if (!$seSuperponen) {
+                                // Usar horas_contabilizadas de la marcación correspondiente si está disponible
+                                $minutosTotalesNormales = 0;
+                                if ($marcacionCorrespondiente && !empty($marcacionCorrespondiente['horas_contabilizadas']) && $marcacionCorrespondiente['horas_contabilizadas'] !== '00:00:00') {
+                                    // Usar el valor ya calculado de la marcación
+                                    $partesNormales = explode(':', $marcacionCorrespondiente['horas_contabilizadas']);
+                                    $horasNormales = (int)($partesNormales[0] ?? 0);
+                                    $minutosNormales = (int)($partesNormales[1] ?? 0);
+                                    $minutosTotalesNormales = ($horasNormales * 60) + $minutosNormales;
+                                } else {
+                                    // Si no tenemos la marcación, intentar calcular con el horario si está disponible
+                                    $resultadoHorasNormales = null;
+                                    if (!empty($hEntradaFunc) && !empty($hSalidaFunc)) {
+                                        $resultadoHorasNormales = calcularHorasTrabajadas(
+                                            $jornada['hora_entrada_marcacion'], 
+                                            $jornada['hora_salida_marcacion'], 
+                                            $hEntradaFunc, 
+                                            $hSalidaFunc
+                                        );
+                                    }
+                                    
+                                    if ($resultadoHorasNormales && $resultadoHorasNormales['horas_contabilizadas'] !== '00:00:00') {
+                                        $partesNormales = explode(':', $resultadoHorasNormales['horas_contabilizadas']);
+                                        $horasNormales = (int)($partesNormales[0] ?? 0);
+                                        $minutosNormales = (int)($partesNormales[1] ?? 0);
+                                        $minutosTotalesNormales = ($horasNormales * 60) + $minutosNormales;
+                                    }
+                                }
+                                
+                                // #region agent log
+                                $logEntry = json_encode([
+                                    'sessionId' => 'debug-session',
+                                    'runId' => 'run1',
+                                    'hypothesisId' => 'C',
+                                    'location' => 'listar.php:1900',
+                                    'message' => 'Calculo horas normales - Jornadas Extra',
+                                    'data' => [
+                                        'id_jornada' => $jornada['id_jornada'],
+                                        'fecha' => $jornada['fecha'],
+                                        'tieneMarcacionCorrespondiente' => $marcacionCorrespondiente !== null,
+                                        'horas_contabilizadas_marcacion' => $marcacionCorrespondiente ? ($marcacionCorrespondiente['horas_contabilizadas'] ?? null) : null,
+                                        'minutosTotalesNormales' => $minutosTotalesNormales,
+                                        'horas_totales_extra' => $jornada['horas_totales'] ?? null
+                                    ],
+                                    'timestamp' => time() * 1000
+                                ]) . "\n";
+                                file_put_contents($logFile, $logEntry, FILE_APPEND);
+                                // #endregion agent log
+                                
+                                // Si aún no tenemos horas normales, no podemos continuar
+                                if ($minutosTotalesNormales === 0) {
+                                    // Mostrar horas reales del reloj como fallback
+                                    $entrada = DateTime::createFromFormat('H:i:s', $jornada['hora_entrada_marcacion']);
+                                    if (!$entrada) {
+                                        $entrada = DateTime::createFromFormat('H:i', $jornada['hora_entrada_marcacion']);
+                                    }
+                                    
+                                    $salida = DateTime::createFromFormat('H:i:s', $jornada['hora_salida_marcacion']);
+                                    if (!$salida) {
+                                        $salida = DateTime::createFromFormat('H:i', $jornada['hora_salida_marcacion']);
+                                    }
+                                    
+                                    if ($entrada && $salida) {
+                                        $minutosEntrada = $entrada->format('H') * 60 + $entrada->format('i');
+                                        $minutosSalida = $salida->format('H') * 60 + $salida->format('i');
+                                        $minutosTrabajados = $minutosSalida - $minutosEntrada;
+                                        
+                                        if ($minutosTrabajados > 0) {
+                                            $horas = floor($minutosTrabajados / 60);
+                                            $minutos = $minutosTrabajados % 60;
+                                            echo sprintf('%d:%02d', $horas, $minutos);
+                                        } else {
+                                            echo '-';
+                                        }
+                                    } else {
+                                        echo '-';
+                                    }
+                                    continue; // Saltar al siguiente registro
+                                }
+                                
+                                // Convertir horas aprobadas de jornada extraordinaria a minutos
+                                $horasTotalesExtra = $jornada['horas_totales'] ?? '00:00:00';
+                                $partesExtra = explode(':', $horasTotalesExtra);
+                                $horasExtra = (int)($partesExtra[0] ?? 0);
+                                $minutosExtra = (int)($partesExtra[1] ?? 0);
+                                $minutosTotalesExtra = ($horasExtra * 60) + $minutosExtra;
+                                
+                                // Sumar horas normales (limitadas al horario) + horas aprobadas
+                                $minutosTotalesTrabajados = $minutosTotalesNormales + $minutosTotalesExtra;
+                                
+                                // #region agent log
+                                $logEntry = json_encode([
+                                    'sessionId' => 'debug-session',
+                                    'runId' => 'run1',
+                                    'hypothesisId' => 'D',
+                                    'location' => 'listar.php:1942',
+                                    'message' => 'Suma final - Jornadas Extra',
+                                    'data' => [
+                                        'id_jornada' => $jornada['id_jornada'],
+                                        'fecha' => $jornada['fecha'],
+                                        'minutosTotalesNormales' => $minutosTotalesNormales,
+                                        'minutosTotalesExtra' => $minutosTotalesExtra,
+                                        'minutosTotalesTrabajados' => $minutosTotalesTrabajados
+                                    ],
+                                    'timestamp' => time() * 1000
+                                ]) . "\n";
+                                file_put_contents($logFile, $logEntry, FILE_APPEND);
+                                // #endregion agent log
+                                
+                                if ($minutosTotalesTrabajados > 0) {
+                                    $horasFinales = floor($minutosTotalesTrabajados / 60);
+                                    $minutosFinales = $minutosTotalesTrabajados % 60;
+                                    echo sprintf('%d:%02d', $horasFinales, $minutosFinales);
                                 } else {
                                     echo '-';
                                 }
                             } else {
-                                echo '-';
+                                // Se superponen: Mostrar horas reales del biométrico
+                                $entrada = DateTime::createFromFormat('H:i:s', $jornada['hora_entrada_marcacion']);
+                                if (!$entrada) {
+                                    $entrada = DateTime::createFromFormat('H:i', $jornada['hora_entrada_marcacion']);
+                                }
+                                
+                                $salida = DateTime::createFromFormat('H:i:s', $jornada['hora_salida_marcacion']);
+                                if (!$salida) {
+                                    $salida = DateTime::createFromFormat('H:i', $jornada['hora_salida_marcacion']);
+                                }
+                                
+                                if ($entrada && $salida) {
+                                    // Calcular diferencia directa en minutos (horas reales del reloj)
+                                    $minutosEntrada = $entrada->format('H') * 60 + $entrada->format('i');
+                                    $minutosSalida = $salida->format('H') * 60 + $salida->format('i');
+                                    $minutosTrabajados = $minutosSalida - $minutosEntrada;
+                                    
+                                    if ($minutosTrabajados > 0) {
+                                        $horas = floor($minutosTrabajados / 60);
+                                        $minutos = $minutosTrabajados % 60;
+                                        echo sprintf('%d:%02d', $horas, $minutos);
+                                    } else {
+                                        echo '-';
+                                    }
+                                } else {
+                                    echo '-';
+                                }
                             }
                         } else {
                             echo '-';

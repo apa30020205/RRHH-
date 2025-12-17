@@ -131,3 +131,43 @@ function calcularHorasTrabajadas($horaEntrada, $horaSalida, $hEntradaFuncionario
         'tiempo_faltante' => $tiempoFaltante
     ];
 }
+
+/**
+ * Verifica si dos rangos de tiempo se superponen
+ * 
+ * @param string $inicio1 Hora de inicio del primer rango (formato H:i:s o H:i)
+ * @param string $fin1 Hora de fin del primer rango (formato H:i:s o H:i)
+ * @param string $inicio2 Hora de inicio del segundo rango (formato H:i:s o H:i)
+ * @param string $fin2 Hora de fin del segundo rango (formato H:i:s o H:i)
+ * @return bool true si se superponen, false si no se superponen
+ */
+function rangosTiempoSeSuperponen($inicio1, $fin1, $inicio2, $fin2) {
+    // Convertir a objetos DateTime
+    $dtInicio1 = DateTime::createFromFormat('H:i:s', $inicio1);
+    if (!$dtInicio1) {
+        $dtInicio1 = DateTime::createFromFormat('H:i', $inicio1);
+    }
+    
+    $dtFin1 = DateTime::createFromFormat('H:i:s', $fin1);
+    if (!$dtFin1) {
+        $dtFin1 = DateTime::createFromFormat('H:i', $fin1);
+    }
+    
+    $dtInicio2 = DateTime::createFromFormat('H:i:s', $inicio2);
+    if (!$dtInicio2) {
+        $dtInicio2 = DateTime::createFromFormat('H:i', $inicio2);
+    }
+    
+    $dtFin2 = DateTime::createFromFormat('H:i:s', $fin2);
+    if (!$dtFin2) {
+        $dtFin2 = DateTime::createFromFormat('H:i', $fin2);
+    }
+    
+    if (!$dtInicio1 || !$dtFin1 || !$dtInicio2 || !$dtFin2) {
+        return false;
+    }
+    
+    // Dos rangos se superponen si hay intersección real (no solo adyacentes)
+    // inicio2 < fin1 Y fin2 > inicio1 (usando < y > para excluir rangos adyacentes)
+    return ($dtInicio2 < $dtFin1 && $dtFin2 > $dtInicio1);
+}
