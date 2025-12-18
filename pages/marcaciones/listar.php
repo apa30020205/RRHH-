@@ -1760,6 +1760,224 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
         // Error al obtener jornadas, no mostrar sección
     }
 endif;
+
+// Obtener permisos del período (solo si hay marcaciones y el período está definido)
+if (!empty($marcaciones) && (!empty($fechaDesde) || !empty($fechaHasta) || !empty($cedulaFiltro))):
+    try {
+        $sqlPermisos = "SELECT p.id_permiso, p.cedula, p.motivo, p.especifique, 
+                               p.fecha_desde, p.hora_desde, p.fecha_hasta, p.hora_hasta,
+                               p.horas_totales, p.fecha_registro,
+                               f.nombre, f.apellido,
+                               CASE WHEN m.id_marcacion IS NOT NULL THEN 1 ELSE 0 END as tiene_marcacion
+                        FROM permisos p
+                        LEFT JOIN funcionarios f ON p.cedula = f.cedula
+                        LEFT JOIN marcaciones m ON p.cedula = m.cedula 
+                            AND m.fecha >= p.fecha_desde AND m.fecha <= p.fecha_hasta
+                        WHERE p.estado = 'activa'";
+        
+        $paramsPermisos = [];
+        $condicionesPermisos = [];
+        
+        if (!empty($cedulaFiltro)) {
+            $condicionesPermisos[] = "p.cedula = ?";
+            $paramsPermisos[] = $cedulaFiltro;
+        }
+        
+        if (!empty($fechaDesde)) {
+            $condicionesPermisos[] = "p.fecha_hasta >= ?";
+            $paramsPermisos[] = $fechaDesde;
+        }
+        
+        if (!empty($fechaHasta)) {
+            $condicionesPermisos[] = "p.fecha_desde <= ?";
+            $paramsPermisos[] = $fechaHasta;
+        }
+        
+        if (!empty($condicionesPermisos)) {
+            $sqlPermisos .= " AND " . implode(" AND ", $condicionesPermisos);
+        }
+        
+        $sqlPermisos .= " ORDER BY p.fecha_desde DESC, p.fecha_registro DESC";
+        
+        $stmtPermisos = $db->prepare($sqlPermisos);
+        $stmtPermisos->execute($paramsPermisos);
+        $permisosPeriodo = $stmtPermisos->fetchAll();
+        
+        // Calcular total de permisos del período
+        $totalPermisosMinutos = 0;
+        foreach ($permisosPeriodo as $permiso) {
+            if (!empty($permiso['horas_totales'])) {
+                $horasTotalesPermiso = $permiso['horas_totales'];
+                $partesPermiso = explode(':', $horasTotalesPermiso);
+                $horasPermiso = (int)($partesPermiso[0] ?? 0);
+                $minutosPermiso = (int)($partesPermiso[1] ?? 0);
+                $totalPermisosMinutos += ($horasPermiso * 60) + $minutosPermiso;
+            }
+        }
+        // Convertir minutos totales a formato HH:MM:00
+        $horasPermisosTotal = floor($totalPermisosMinutos / 60);
+        $minutosPermisosTotal = $totalPermisosMinutos % 60;
+        $totalPermisos = sprintf('%02d:%02d:00', $horasPermisosTotal, $minutosPermisosTotal);
+        
+        if (count($permisosPeriodo) > 0):
+?>
+<style>
+.permisos-periodo-section {
+    margin-top: 2rem;
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.permisos-periodo-section h3 {
+    color: #4caf50;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #4caf50;
+}
+
+.permisos-periodo-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.permisos-periodo-table th {
+    background: #4caf50;
+    color: white;
+    padding: 0.75rem;
+    text-align: left;
+    border: 1px solid #45a049;
+}
+
+.permisos-periodo-table td {
+    padding: 0.75rem;
+    border: 1px solid #dee2e6;
+}
+
+.permisos-periodo-table tr.permiso-con-marcacion {
+    background-color: #c8e6c9;
+}
+
+.permisos-periodo-table tr.permiso-sin-marcacion {
+    background-color: #c8e6c9;
+    color: #2e7d32;
+}
+
+.permisos-periodo-table tr.permiso-con-marcacion td {
+    color: #2e7d32;
+    font-weight: 500;
+}
+
+.permisos-periodo-table tr.permiso-sin-marcacion td {
+    color: #2e7d32;
+    font-weight: 500;
+}
+</style>
+
+<div class="permisos-periodo-section">
+    <h3><i class="fas fa-calendar-check"></i> Permisos del Período</h3>
+    <table class="permisos-periodo-table">
+        <thead>
+            <tr>
+                <?php if (empty($cedulaFiltro)): ?>
+                <th>Cédula</th>
+                <th>Nombre</th>
+                <?php endif; ?>
+                <th>Fecha Desde</th>
+                <th>Hora Desde</th>
+                <th>Fecha Hasta</th>
+                <th>Hora Hasta</th>
+                <th>Horas Totales</th>
+                <th>Motivo</th>
+                <th>Especifique</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($permisosPeriodo as $permiso):
+                $claseFila = $permiso['tiene_marcacion'] ? 'permiso-con-marcacion' : 'permiso-sin-marcacion';
+            ?>
+                <tr class="<?php echo $claseFila; ?>">
+                    <?php if (empty($cedulaFiltro)): ?>
+                    <td><?php echo htmlspecialchars($permiso['cedula']); ?></td>
+                    <td><?php echo htmlspecialchars(($permiso['nombre'] ?? '') . ' ' . ($permiso['apellido'] ?? '')); ?></td>
+                    <?php endif; ?>
+                    <td><?php echo date('d/m/Y', strtotime($permiso['fecha_desde'])); ?></td>
+                    <td>
+                        <?php
+                        if ($permiso['hora_desde']) {
+                            $hora = new DateTime($permiso['hora_desde']);
+                            $horaFormato = $hora->format('g:i');
+                            $ampm = strtolower($hora->format('A'));
+                            $ampm = str_replace(['am', 'pm'], ['a.m.', 'p.m.'], $ampm);
+                            echo $horaFormato . ' ' . $ampm;
+                        } else {
+                            echo '-';
+                        }
+                        ?>
+                    </td>
+                    <td><?php echo date('d/m/Y', strtotime($permiso['fecha_hasta'])); ?></td>
+                    <td>
+                        <?php
+                        if ($permiso['hora_hasta']) {
+                            $hora = new DateTime($permiso['hora_hasta']);
+                            $horaFormato = $hora->format('g:i');
+                            $ampm = strtolower($hora->format('A'));
+                            $ampm = str_replace(['am', 'pm'], ['a.m.', 'p.m.'], $ampm);
+                            echo $horaFormato . ' ' . $ampm;
+                        } else {
+                            echo '-';
+                        }
+                        ?>
+                    </td>
+                    <td><strong>
+                        <?php
+                        if (!empty($permiso['horas_totales'])) {
+                            $horasTotales = $permiso['horas_totales'];
+                            if (strlen($horasTotales) >= 5) {
+                                echo substr($horasTotales, 0, 5);
+                            } else {
+                                echo $horasTotales;
+                            }
+                        } else {
+                            echo '-';
+                        }
+                        ?>
+                    </strong></td>
+                    <td><?php echo htmlspecialchars($permiso['motivo']); ?></td>
+                    <td><?php echo htmlspecialchars(substr($permiso['especifique'] ?? '', 0, 50)); ?><?php echo strlen($permiso['especifique'] ?? '') > 50 ? '...' : ''; ?></td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+    
+    <!-- Sumatoria de Permisos del Período - Debajo de la tabla -->
+    <div style="margin-top: 1rem; color: #666; display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;">
+        <div>
+            <strong>Total Permisos del Período:</strong>
+            <span style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; color: #2e7d32;">
+                <?php
+                if (!empty($totalPermisos)) {
+                    $partes = explode(':', $totalPermisos);
+                    $horasInt = (int)($partes[0] ?? 0);
+                    $minutosInt = (int)($partes[1] ?? 0);
+                    echo sprintf('%d:%02d', $horasInt, $minutosInt);
+                } else {
+                    echo '00:00';
+                }
+                ?>
+            </span>
+        </div>
+    </div>
+</div>
+
+<?php 
+        endif;
+    } catch (Exception $e) {
+        // Error al obtener permisos, no mostrar sección
+    }
+endif;
 ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

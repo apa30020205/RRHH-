@@ -329,15 +329,15 @@ include __DIR__ . '/../../includes/header.php';
     </div>
     
     <!-- Card 5: Solicitud de Permiso (Verde) -->
-    <div class="permiso-card" onclick="mostrarConstruccion()">
+    <div class="permiso-card">
         <div class="icon-container">
             <i class="fas fa-calendar-check fa-icon"></i>
         </div>
         <h3>Solicitud de Permiso</h3>
         <p>Solicitud de permiso personal</p>
-        <button class="btn" onclick="event.stopPropagation(); mostrarConstruccion();">
+        <a href="<?php echo BASE_URL; ?>/forms/permisos/solicitud_permiso.php" class="btn">
             <i class="fas fa-edit"></i> Llenar Formulario
-        </button>
+        </a>
     </div>
     
     <!-- Card 6: Solicitud de Vacaciones (Rosa) -->

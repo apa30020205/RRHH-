@@ -27,3 +27,4 @@ DEALLOCATE PREPARE stmt;
 DESCRIBE `funcionarios`;
 
 
+

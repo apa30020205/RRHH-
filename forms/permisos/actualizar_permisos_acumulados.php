@@ -1,9 +1,9 @@
 <?php
 /**
- * Actualizar Horas Extraordinarias Acumuladas
+ * Actualizar Permisos Acumulados
  * Sistema RRHH
  * 
- * Endpoint AJAX para actualizar las horas extraordinarias acumuladas de un funcionario
+ * Endpoint AJAX para actualizar los permisos acumulados de un funcionario
  */
 
 header('Content-Type: application/json');
@@ -13,7 +13,7 @@ require_once __DIR__ . '/../../classes/Database.php';
 require_once __DIR__ . '/../../roles_rrhh/classes/Auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
-// Solo administradores pueden actualizar horas acumuladas
+// Solo administradores pueden actualizar permisos acumulados
 if (!Auth::isAdmin()) {
     http_response_code(403);
     echo json_encode(['success' => false, 'error' => 'No tienes permisos para realizar esta acción']);
@@ -39,7 +39,7 @@ if (!$data) {
 
 // Validar campos requeridos
 $cedula = isset($data['cedula']) ? trim($data['cedula']) : '';
-$horasAcumuladas = isset($data['horas_acumuladas']) ? trim($data['horas_acumuladas']) : '';
+$permisosAcumulados = isset($data['permisos_acumulados']) ? trim($data['permisos_acumulados']) : '';
 
 if (empty($cedula)) {
     http_response_code(400);
@@ -48,9 +48,28 @@ if (empty($cedula)) {
 }
 
 // Validar formato de tiempo (HH:MM:SS)
-if (!empty($horasAcumuladas) && !preg_match('/^\d{2}:\d{2}:\d{2}$/', $horasAcumuladas)) {
+if (empty($permisosAcumulados)) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'error' => 'Formato de tiempo inválido. Debe ser HH:MM:SS']);
+    echo json_encode(['success' => false, 'error' => 'Los permisos acumulados son requeridos']);
+    exit();
+}
+
+// Validar formato HH:MM:SS
+if (!preg_match('/^([0-9]{1,2}):([0-5][0-9]):([0-5][0-9])$/', $permisosAcumulados)) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Formato inválido. Use HH:MM:SS']);
+    exit();
+}
+
+// Validar límite de MySQL TIME (838:59:59)
+$partes = explode(':', $permisosAcumulados);
+$horas = (int)$partes[0];
+$minutos = (int)$partes[1];
+$segundos = (int)$partes[2];
+
+if ($horas > 838 || ($horas == 838 && ($minutos > 59 || ($minutos == 59 && $segundos > 59)))) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'El valor excede el límite de MySQL TIME (838:59:59)']);
     exit();
 }
 
@@ -60,59 +79,54 @@ try {
     // Verificar que el funcionario existe
     $stmtCheck = $db->prepare("SELECT cedula FROM funcionarios WHERE cedula = ?");
     $stmtCheck->execute([$cedula]);
-    if ($stmtCheck->rowCount() === 0) {
+    if (!$stmtCheck->fetch()) {
         http_response_code(404);
         echo json_encode(['success' => false, 'error' => 'Funcionario no encontrado']);
         exit();
     }
     
-    // Verificar si la columna existe
+    // Verificar si existe la columna
     $stmtCheckCol = $db->query("
-        SELECT COUNT(*) as existe 
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = 'funcionarios' 
-        AND COLUMN_NAME = 'horas_extraordinarias_acumuladas'
+        SELECT COUNT(*) as existe
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'funcionarios'
+        AND COLUMN_NAME = 'permisos_acumulados'
     ");
     $columnaExiste = $stmtCheckCol->fetch()['existe'] > 0;
     
     if (!$columnaExiste) {
         http_response_code(500);
-        echo json_encode(['success' => false, 'error' => 'La columna horas_extraordinarias_acumuladas no existe en la base de datos']);
+        echo json_encode(['success' => false, 'error' => 'La columna permisos_acumulados no existe en la tabla funcionarios']);
         exit();
     }
     
-    // Actualizar el valor (permitir NULL si se envía vacío)
-    $valorTime = !empty($horasAcumuladas) ? $horasAcumuladas : null;
-    
+    // Actualizar permisos_acumulados
     $stmt = $db->prepare("
         UPDATE funcionarios 
-        SET horas_extraordinarias_acumuladas = ? 
+        SET permisos_acumulados = ?
         WHERE cedula = ?
     ");
-    $stmt->execute([$valorTime, $cedula]);
+    
+    $stmt->execute([$permisosAcumulados, $cedula]);
     
     echo json_encode([
         'success' => true,
-        'mensaje' => 'Horas acumuladas actualizadas correctamente'
+        'message' => 'Permisos acumulados actualizados correctamente'
     ]);
     
 } catch (PDOException $e) {
     http_response_code(500);
-    error_log("Error al actualizar horas acumuladas: " . $e->getMessage());
     echo json_encode([
         'success' => false,
-        'error' => 'Error al actualizar las horas acumuladas: ' . $e->getMessage()
+        'error' => 'Error al actualizar permisos acumulados: ' . $e->getMessage()
     ]);
 } catch (Exception $e) {
     http_response_code(500);
-    error_log("Error inesperado al actualizar horas acumuladas: " . $e->getMessage());
     echo json_encode([
         'success' => false,
-        'error' => 'Error inesperado: ' . $e->getMessage()
+        'error' => 'Error: ' . $e->getMessage()
     ]);
 }
 ?>
-
-
 
