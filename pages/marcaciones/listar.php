@@ -113,7 +113,8 @@ try {
     
     $campoTodasMarcaciones = $tieneTodasMarcaciones ? 'm.todas_marcaciones,' : 'NULL as todas_marcaciones,';
     
-    $sql = "SELECT m.id_marcacion, m.cedula, m.fecha, 
+    // Construir consulta base para marcaciones con jornadas extraordinarias
+    $sqlBase = "SELECT m.id_marcacion, m.cedula, m.fecha, 
                    TIME_FORMAT(m.hora_entrada, '%H:%i:%s') as hora_entrada,
                    $camposAlmuerzo
                    TIME_FORMAT(m.hora_salida, '%H:%i:%s') as hora_salida,
@@ -126,26 +127,62 @@ try {
             FROM $tablaMarcaciones m
             LEFT JOIN $tablaFuncionarios f ON m.cedula = f.cedula
             LEFT JOIN jornada_extraordinaria j ON m.cedula = j.cedula AND m.fecha = j.fecha AND j.estado = 'activa'";
+    
+    // Construir consulta para jornadas extraordinarias sin marcaciones
+    $camposAlmuerzoJornada = "NULL as almuerzo_salida, NULL as almuerzo_entrada,";
+    $sqlJornadasSinMarcaciones = "SELECT NULL as id_marcacion, j.cedula, j.fecha,
+                   NULL as hora_entrada,
+                   $camposAlmuerzoJornada
+                   NULL as hora_salida,
+                   NULL as horas_trabajadas, NULL as tiempo_faltante, NULL as fecha_importacion,
+                   NULL as todas_marcaciones,
+                   f.nombre, f.apellido,
+                   j.id_jornada, j.hora_desde as jornada_hora_desde,
+                   j.hora_hasta as jornada_hora_hasta, j.horas_totales as jornada_horas_totales,
+                   j.justificacion as jornada_justificacion
+            FROM jornada_extraordinaria j
+            LEFT JOIN $tablaFuncionarios f ON j.cedula = f.cedula
+            WHERE j.estado = 'activa'
+            AND NOT EXISTS (
+                SELECT 1 FROM $tablaMarcaciones m2 
+                WHERE m2.cedula = j.cedula 
+                AND m2.fecha = j.fecha
+            )";
+    
+    // Combinar ambas consultas con UNION
+    $sql = "($sqlBase) UNION ($sqlJornadasSinMarcaciones)";
     $params = [];
     $condiciones = [];
     
+    // Construir condiciones para la primera consulta (marcaciones)
+    $condicionesMarcaciones = [];
+    $condicionesJornadas = [];
+    $paramsMarcaciones = [];
+    $paramsJornadas = [];
+    
     // Filtrar por cédula específica (si viene de la lista de funcionarios)
     if (!empty($cedulaFiltro)) {
-        $condiciones[] = "m.cedula = ?";
-        $params[] = $cedulaFiltro;
+        $condicionesMarcaciones[] = "m.cedula = ?";
+        $condicionesJornadas[] = "j.cedula = ?";
+        $paramsMarcaciones[] = $cedulaFiltro;
+        $paramsJornadas[] = $cedulaFiltro;
     }
     
     // Filtrar por rango de fechas
     if (!empty($fechaDesde)) {
-        $condiciones[] = "m.fecha >= ?";
-        $params[] = $fechaDesde;
+        $condicionesMarcaciones[] = "m.fecha >= ?";
+        $condicionesJornadas[] = "j.fecha >= ?";
+        $paramsMarcaciones[] = $fechaDesde;
+        $paramsJornadas[] = $fechaDesde;
     }
     if (!empty($fechaHasta)) {
-        $condiciones[] = "m.fecha <= ?";
-        $params[] = $fechaHasta;
+        $condicionesMarcaciones[] = "m.fecha <= ?";
+        $condicionesJornadas[] = "j.fecha <= ?";
+        $paramsMarcaciones[] = $fechaHasta;
+        $paramsJornadas[] = $fechaHasta;
     }
     
-    // Agregar condición de búsqueda si existe
+    // Agregar condición de búsqueda si existe (solo para marcaciones, ya que jornadas sin marcaciones no tienen esos campos)
     if (!empty($busqueda)) {
         $busquedaLimpia = '%' . $busqueda . '%';
         $condicionesBusqueda = [
@@ -156,33 +193,52 @@ try {
             "TIME_FORMAT(m.hora_entrada, '%H:%i:%s') LIKE ?",
             "TIME_FORMAT(m.hora_salida, '%H:%i:%s') LIKE ?"
         ];
-        $condiciones[] = "(" . implode(" OR ", $condicionesBusqueda) . ")";
+        $condicionesMarcaciones[] = "(" . implode(" OR ", $condicionesBusqueda) . ")";
         // Agregar parámetros para cada campo de búsqueda
         for ($i = 0; $i < 6; $i++) {
-            $params[] = $busquedaLimpia;
+            $paramsMarcaciones[] = $busquedaLimpia;
         }
     }
     
-    // Agregar condiciones WHERE si existen
-    if (!empty($condiciones)) {
-        $sql .= " WHERE " . implode(" AND ", $condiciones);
+    // Aplicar condiciones a la primera consulta (marcaciones)
+    if (!empty($condicionesMarcaciones)) {
+        $sqlBase .= " WHERE " . implode(" AND ", $condicionesMarcaciones);
     }
     
-    // Agregar ordenamiento
+    // Aplicar condiciones a la segunda consulta (jornadas sin marcaciones)
+    if (!empty($condicionesJornadas)) {
+        $sqlJornadasSinMarcaciones .= " AND " . implode(" AND ", $condicionesJornadas);
+    }
+    
+    // Reconstruir SQL completo con condiciones aplicadas
+    $sql = "($sqlBase) UNION ($sqlJornadasSinMarcaciones)";
+    $params = array_merge($paramsMarcaciones, $paramsJornadas);
+    
+    // Agregar ordenamiento (usar alias de columnas para UNION)
     $sql .= " ORDER BY ";
     if ($ordenarPor === 'nombre' || $ordenarPor === 'apellido') {
         // Para nombre y apellido, usar COALESCE para manejar NULL
-        $sql .= "COALESCE(f.$ordenarPor, '') $direccion";
+        $sql .= "COALESCE(nombre, '') $direccion";
         if ($ordenarPor === 'apellido') {
-            $sql .= ", COALESCE(f.nombre, '') $direccion, m.cedula $direccion";
+            $sql .= ", COALESCE(nombre, '') $direccion, cedula $direccion";
         } else {
-            $sql .= ", COALESCE(f.apellido, '') $direccion, m.cedula $direccion";
+            $sql .= ", COALESCE(apellido, '') $direccion, cedula $direccion";
         }
     } else {
-        // Para otros campos, ordenar directamente
-        $sql .= "m.$ordenarPor $direccion";
+        // Mapear campos de marcaciones a alias de UNION
+        $campoOrden = $ordenarPor;
+        if ($ordenarPor === 'fecha') {
+            $campoOrden = 'fecha';
+        } elseif ($ordenarPor === 'fecha_importacion') {
+            $campoOrden = 'fecha_importacion';
+        } elseif ($ordenarPor === 'id_marcacion') {
+            $campoOrden = 'id_marcacion';
+        } else {
+            $campoOrden = $ordenarPor;
+        }
+        $sql .= "$campoOrden $direccion";
         // Agregar ordenamiento secundario
-        $sql .= ", m.fecha DESC, m.fecha_importacion DESC";
+        $sql .= ", fecha DESC, fecha_importacion DESC";
     }
     
     // Ejecutar consulta
@@ -190,13 +246,29 @@ try {
     $stmt->execute($params);
     $marcaciones = $stmt->fetchAll();
     
-    // Contar total (con búsqueda y filtros si aplica)
-    $sqlCount = "SELECT COUNT(*) as total 
-                 FROM $tablaMarcaciones m
-                 LEFT JOIN $tablaFuncionarios f ON m.cedula = f.cedula";
-    if (!empty($condiciones)) {
-        $sqlCount .= " WHERE " . implode(" AND ", $condiciones);
+    // Contar total (incluyendo jornadas sin marcaciones)
+    $sqlCount = "SELECT COUNT(*) as total FROM (
+        SELECT m.id_marcacion
+        FROM $tablaMarcaciones m
+        LEFT JOIN $tablaFuncionarios f ON m.cedula = f.cedula";
+    if (!empty($condicionesMarcaciones)) {
+        $sqlCount .= " WHERE " . implode(" AND ", $condicionesMarcaciones);
     }
+    $sqlCount .= "
+        UNION
+        SELECT j.id_jornada as id_marcacion
+        FROM jornada_extraordinaria j
+        LEFT JOIN $tablaFuncionarios f ON j.cedula = f.cedula
+        WHERE j.estado = 'activa'
+        AND NOT EXISTS (
+            SELECT 1 FROM $tablaMarcaciones m2 
+            WHERE m2.cedula = j.cedula 
+            AND m2.fecha = j.fecha
+        )";
+    if (!empty($condicionesJornadas)) {
+        $sqlCount .= " AND " . implode(" AND ", $condicionesJornadas);
+    }
+    $sqlCount .= ") as total_union";
     $stmtCount = $db->prepare($sqlCount);
     $stmtCount->execute($params);
     $totalRegistros = $stmtCount->fetch()['total'];
@@ -723,7 +795,7 @@ include __DIR__ . '/../../includes/header.php';
                     }
                 ?>
                     <tr style="border-bottom: 1px solid #dee2e6; <?php echo $estiloFila; ?>" <?php echo $tieneJornadaExtra ? 'class="fila-jornada-extra"' : ''; ?>>
-                        <td style="padding: 0.75rem; border: 1px solid #dee2e6; <?php echo $tieneJornadaExtra ? 'color: white !important;' : ''; ?>"><?php echo htmlspecialchars($marcacion['id_marcacion']); ?></td>
+                        <td style="padding: 0.75rem; border: 1px solid #dee2e6; <?php echo $tieneJornadaExtra ? 'color: white !important;' : ''; ?>"><?php echo $marcacion['id_marcacion'] ? htmlspecialchars($marcacion['id_marcacion']) : '-'; ?></td>
                         <?php if (empty($cedulaFiltro)): ?>
                         <td style="padding: 0.75rem; border: 1px solid #dee2e6; font-weight: bold; <?php echo $tieneJornadaExtra ? 'color: white !important;' : ''; ?>"><?php echo htmlspecialchars($marcacion['cedula']); ?></td>
                         <td style="padding: 0.75rem; border: 1px solid #dee2e6; <?php echo $tieneJornadaExtra ? 'color: white !important;' : ''; ?>"><?php echo htmlspecialchars($marcacion['nombre'] ?? '-'); ?></td>
@@ -969,8 +1041,13 @@ include __DIR__ . '/../../includes/header.php';
                                     $minutosFinales = $minutosTotales % 60;
                                     echo sprintf('%d:%02d', $horasFinales, $minutosFinales);
                                 } else {
-                                    // Sin marcaciones biométricas: mostrar solo las horas extraordinarias aprobadas
-                                    echo sprintf('%d:%02d', $horasExtra, $minutosExtra);
+                                    // Sin marcaciones biométricas: mostrar solo las horas extraordinarias aprobadas (formato HH:MM)
+                                    $horasTotalesExtra = $marcacion['jornada_horas_totales'] ?? '00:00:00';
+                                    if (strlen($horasTotalesExtra) >= 5) {
+                                        echo substr($horasTotalesExtra, 0, 5); // Toma solo HH:MM
+                                    } else {
+                                        echo sprintf('%d:%02d', $horasExtra, $minutosExtra);
+                                    }
                                 }
                             } else {
                                 // Sin jornada extraordinaria: mostrar horas contabilizadas normales
@@ -1546,8 +1623,8 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
 }
 
 .jornadas-extras-table tr.jornada-sin-marcacion {
-    background-color: #ffcccc;
-    color: #721c24;
+    background-color: #E3F2FD;
+    color: #1976D2;
 }
 
 .jornadas-extras-table tr.jornada-con-marcacion td {
@@ -1556,7 +1633,8 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
 }
 
 .jornadas-extras-table tr.jornada-sin-marcacion td {
-    color: #721c24;
+    color: #1976D2;
+    font-weight: 500;
 }
 </style>
 
