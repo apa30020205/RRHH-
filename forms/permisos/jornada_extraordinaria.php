@@ -43,20 +43,9 @@ if (!empty($busqueda)) {
         $stmt->execute([$busquedaLike, $busquedaLike, $busquedaLike]);
         $funcionario = $stmt->fetch();
         
-        // Si se encontró, cargar jornadas registradas usando la cédula exacta de la BD
+        // Si se encontró, guardar la cédula para usar después
         if ($funcionario) {
             $cedulaBD = $funcionario['cedula']; // Usar la cédula exacta de la BD
-            
-            // Obtener jornadas del funcionario usando la cédula de la BD
-            $stmtJornadas = $db->prepare("
-                SELECT id_jornada, fecha, hora_desde, hora_hasta, horas_totales, 
-                       justificacion, fecha_registro, estado
-                FROM jornada_extraordinaria
-                WHERE cedula = ? AND estado = 'activa'
-                ORDER BY fecha DESC, fecha_registro DESC
-            ");
-            $stmtJornadas->execute([$cedulaBD]);
-            $jornadas = $stmtJornadas->fetchAll();
         }
     } catch (Exception $e) {
         mostrarMensaje("Error al buscar funcionario: " . $e->getMessage(), 'error');
@@ -67,12 +56,16 @@ if (!empty($busqueda)) {
 $fechaDesdeFiltro = isset($_GET['fecha_desde']) ? $_GET['fecha_desde'] : '';
 $fechaHastaFiltro = isset($_GET['fecha_hasta']) ? $_GET['fecha_hasta'] : '';
 
-if ($funcionario && (!empty($fechaDesdeFiltro) || !empty($fechaHastaFiltro))) {
+// Procesar filtro de fechas y cargar jornadas para mostrar en tabla
+// Variable para almacenar horas acumuladas (se calculará después si hay funcionario)
+$horasAcumuladasMostrar = null;
+
+if ($funcionario) {
     try {
         $db = Database::getInstance()->getConnection();
-        // Usar la cédula exacta de la BD (con guiones)
         $cedulaBD = $funcionario['cedula'];
         
+        // Cargar jornadas para la tabla (aplicar filtro de fechas si existe)
         $sql = "SELECT id_jornada, fecha, hora_desde, hora_hasta, horas_totales, 
                        justificacion, fecha_registro, estado
                 FROM jornada_extraordinaria
@@ -94,8 +87,55 @@ if ($funcionario && (!empty($fechaDesdeFiltro) || !empty($fechaHastaFiltro))) {
         $stmtJornadas = $db->prepare($sql);
         $stmtJornadas->execute($params);
         $jornadas = $stmtJornadas->fetchAll();
+        
+        // Calcular sumatoria de TODAS las horas extraordinarias activas (sin filtro de fechas)
+        $stmtTodasJornadas = $db->prepare("
+            SELECT horas_totales
+            FROM jornada_extraordinaria
+            WHERE cedula = ? AND estado = 'activa'
+        ");
+        $stmtTodasJornadas->execute([$cedulaBD]);
+        $todasJornadas = $stmtTodasJornadas->fetchAll();
+        
+        // Calcular sumatoria de horas (convertir a número entero de horas)
+        $totalHorasCalculado = 0;
+        foreach ($todasJornadas as $jornada) {
+            if (!empty($jornada['horas_totales'])) {
+                $partes = explode(':', $jornada['horas_totales']);
+                $horas = (int)($partes[0] ?? 0);
+                $minutos = (int)($partes[1] ?? 0);
+                // Sumar horas y redondear si hay más de 30 minutos
+                $totalHorasCalculado += $horas + ($minutos >= 30 ? 1 : 0);
+            }
+        }
+        
+        // Obtener valor guardado en funcionarios si existe (convertir de TIME a horas si es necesario)
+        $stmtHorasAcum = $db->prepare("
+            SELECT horas_extraordinarias_acumuladas 
+            FROM funcionarios 
+            WHERE cedula = ?
+        ");
+        $stmtHorasAcum->execute([$cedulaBD]);
+        $resultadoHoras = $stmtHorasAcum->fetch();
+        $horasAcumuladasGuardadas = null;
+        
+        if (!empty($resultadoHoras['horas_extraordinarias_acumuladas'])) {
+            // Si viene como TIME, convertir a horas
+            $timeValue = $resultadoHoras['horas_extraordinarias_acumuladas'];
+            if (is_string($timeValue) && strpos($timeValue, ':') !== false) {
+                $partes = explode(':', $timeValue);
+                $horasGuardadas = (int)($partes[0] ?? 0);
+                $minutosGuardados = (int)($partes[1] ?? 0);
+                $horasAcumuladasGuardadas = $horasGuardadas + ($minutosGuardados >= 30 ? 1 : 0);
+            } else {
+                $horasAcumuladasGuardadas = (int)$timeValue;
+            }
+        }
+        
+        // Usar valor guardado si existe, sino usar el calculado
+        $horasAcumuladasMostrar = $horasAcumuladasGuardadas ?? $totalHorasCalculado;
     } catch (Exception $e) {
-        mostrarMensaje("Error al filtrar jornadas: " . $e->getMessage(), 'error');
+        mostrarMensaje("Error al procesar jornadas: " . $e->getMessage(), 'error');
     }
 }
 
@@ -417,6 +457,39 @@ if ($mensaje): ?>
     <?php else: ?>
         <p>No hay jornadas extraordinarias registradas para este funcionario.</p>
     <?php endif; ?>
+    
+    <!-- Sumatoria de Horas Extraordinarias Acumuladas - Debajo de la tabla -->
+    <?php if ($funcionario): ?>
+    <div style="margin-top: 1rem; color: #666; display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;">
+        <div>
+            <strong>Horas Extraordinarias Acumuladas:</strong>
+            <span id="horas-acumuladas-display" 
+                  style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; color: #1976D2; cursor: pointer; padding: 0.25rem 0.5rem; border-bottom: 1px dashed #1976D2;"
+                  onmouseover="this.style.background='#e3f2fd';" 
+                  onmouseout="this.style.background='transparent';"
+                  onclick="editarHorasAcumuladas()"
+                  title="Click para editar">
+                <?php echo (int)($horasAcumuladasMostrar ?? 0); ?>
+            </span>
+            <input type="number" 
+                   id="horas-acumuladas-input" 
+                   value="<?php echo (int)($horasAcumuladasMostrar ?? 0); ?>"
+                   min="0"
+                   step="1"
+                   style="display: none; font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; padding: 0.25rem 0.5rem; border: 1px solid #2196F3; border-radius: 3px; width: 80px; text-align: center;"
+                   onblur="guardarHorasAcumuladas()"
+                   onkeydown="if(event.key === 'Enter') { event.preventDefault(); guardarHorasAcumuladas(); } if(event.key === 'Escape') cancelarEdicion();">
+            <button id="btn-guardar-horas" 
+                    onclick="guardarHorasAcumuladas()" 
+                    style="display: none; margin-left: 0.5rem; padding: 0.25rem 0.75rem; background: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">
+                Guardar
+            </button>
+            <span id="mensaje-horas" style="color: #28a745; font-weight: bold; margin-left: 0.5rem;"></span>
+        </div>
+    </div>
+    <input type="hidden" id="cedula-funcionario" value="<?php echo htmlspecialchars($funcionario['cedula'], ENT_QUOTES); ?>">
+    <input type="hidden" id="horas-acumuladas-original" value="<?php echo (int)($horasAcumuladasMostrar ?? 0); ?>">
+    <?php endif; ?>
 </div>
 
 <script>
@@ -538,6 +611,106 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// Funciones para editar horas acumuladas
+function editarHorasAcumuladas() {
+    const display = document.getElementById('horas-acumuladas-display');
+    const input = document.getElementById('horas-acumuladas-input');
+    const btnGuardar = document.getElementById('btn-guardar-horas');
+    const mensaje = document.getElementById('mensaje-horas');
+    
+    display.style.display = 'none';
+    input.style.display = 'inline-block';
+    btnGuardar.style.display = 'inline-block';
+    mensaje.textContent = '';
+    input.focus();
+    input.select();
+}
+
+function cancelarEdicion() {
+    const display = document.getElementById('horas-acumuladas-display');
+    const input = document.getElementById('horas-acumuladas-input');
+    const btnGuardar = document.getElementById('btn-guardar-horas');
+    const original = document.getElementById('horas-acumuladas-original');
+    const mensaje = document.getElementById('mensaje-horas');
+    
+    // Restaurar valor original
+    input.value = original.value;
+    
+    display.style.display = 'inline';
+    input.style.display = 'none';
+    btnGuardar.style.display = 'none';
+    mensaje.textContent = '';
+}
+
+function guardarHorasAcumuladas() {
+    const input = document.getElementById('horas-acumuladas-input');
+    const display = document.getElementById('horas-acumuladas-display');
+    const btnGuardar = document.getElementById('btn-guardar-horas');
+    const cedula = document.getElementById('cedula-funcionario').value;
+    const mensaje = document.getElementById('mensaje-horas');
+    
+    const horasValue = parseInt(input.value);
+    
+    if (isNaN(horasValue) || horasValue < 0) {
+        alert('Por favor ingrese un número válido (mayor o igual a 0)');
+        input.focus();
+        return;
+    }
+    
+    // Deshabilitar botón durante la petición
+    btnGuardar.disabled = true;
+    btnGuardar.textContent = 'Guardando...';
+    
+    // Convertir horas a formato TIME (HH:MM:SS) para guardar en BD
+    const horasFormatoTime = String(horasValue).padStart(2, '0') + ':00:00';
+    
+    // Enviar petición AJAX
+    fetch('<?php echo BASE_URL; ?>/forms/permisos/actualizar_horas_extraordinarias_acumuladas.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            cedula: cedula,
+            horas_acumuladas: horasFormatoTime
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Actualizar display con nuevo valor (solo número)
+            display.textContent = horasValue;
+            
+            // Actualizar valor original
+            document.getElementById('horas-acumuladas-original').value = horasValue;
+            
+            // Volver a modo lectura
+            display.style.display = 'inline';
+            input.style.display = 'none';
+            btnGuardar.style.display = 'none';
+            
+            // Mostrar mensaje de éxito
+            mensaje.textContent = '✓ Guardado';
+            mensaje.style.color = '#28a745';
+            
+            // Ocultar mensaje después de 2 segundos
+            setTimeout(() => {
+                mensaje.textContent = '';
+            }, 2000);
+        } else {
+            alert('Error al guardar: ' + (data.error || 'Error desconocido'));
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Guardar';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error al guardar las horas acumuladas');
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = 'Guardar';
+    });
+}
 </script>
 
 <?php endif; ?>
