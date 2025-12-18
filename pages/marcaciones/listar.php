@@ -1574,7 +1574,6 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
                 <th>Hora Hasta</th>
                 <th>Horas/J.Extra.</th>
                 <th>Justificación</th>
-                <th>Estado</th>
             </tr>
         </thead>
         <tbody>
@@ -1615,15 +1614,22 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
                         }
                         ?>
                     </td>
-                    <td><strong><?php echo $jornada['horas_totales'] ?? '-'; ?></strong></td>
+                    <td><strong>
+                        <?php 
+                        if (!empty($jornada['horas_totales'])) {
+                            // Formatear para mostrar solo HH:MM (sin segundos)
+                            $horasTotales = $jornada['horas_totales'];
+                            if (strlen($horasTotales) >= 5) {
+                                echo substr($horasTotales, 0, 5); // Toma solo HH:MM
+                            } else {
+                                echo $horasTotales;
+                            }
+                        } else {
+                            echo '-';
+                        }
+                        ?>
+                    </strong></td>
                     <td><?php echo htmlspecialchars(substr($jornada['justificacion'], 0, 50)); ?><?php echo strlen($jornada['justificacion']) > 50 ? '...' : ''; ?></td>
-                    <td>
-                        <?php if ($jornada['tiene_marcacion']): ?>
-                            <span style="color: #1976D2;"><i class="fas fa-check-circle"></i> Coincide con marcación</span>
-                        <?php else: ?>
-                            <span style="color: #721c24;"><i class="fas fa-exclamation-triangle"></i> Sin marcación (ajustar horario)</span>
-                        <?php endif; ?>
-                    </td>
                 </tr>
             <?php endforeach; ?>
         </tbody>

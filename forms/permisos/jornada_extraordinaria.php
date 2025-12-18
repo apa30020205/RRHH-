@@ -97,19 +97,19 @@ if ($funcionario) {
         $stmtTodasJornadas->execute([$cedulaBD]);
         $todasJornadas = $stmtTodasJornadas->fetchAll();
         
-        // Calcular sumatoria de horas (convertir a número entero de horas)
-        $totalHorasCalculado = 0;
+        // Calcular sumatoria de minutos totales (sin redondear)
+        $totalMinutosCalculado = 0;
         foreach ($todasJornadas as $jornada) {
             if (!empty($jornada['horas_totales'])) {
                 $partes = explode(':', $jornada['horas_totales']);
                 $horas = (int)($partes[0] ?? 0);
                 $minutos = (int)($partes[1] ?? 0);
-                // Sumar horas y redondear si hay más de 30 minutos
-                $totalHorasCalculado += $horas + ($minutos >= 30 ? 1 : 0);
+                // Sumar minutos totales (sin redondear)
+                $totalMinutosCalculado += ($horas * 60) + $minutos;
             }
         }
         
-        // Obtener valor guardado en funcionarios si existe (convertir de TIME a horas si es necesario)
+        // Obtener valor guardado en funcionarios si existe (convertir de TIME a minutos)
         $stmtHorasAcum = $db->prepare("
             SELECT horas_extraordinarias_acumuladas 
             FROM funcionarios 
@@ -120,20 +120,26 @@ if ($funcionario) {
         $horasAcumuladasGuardadas = null;
         
         if (!empty($resultadoHoras['horas_extraordinarias_acumuladas'])) {
-            // Si viene como TIME, convertir a horas
+            // Si viene como TIME, mantener como string HH:MM para mostrar
             $timeValue = $resultadoHoras['horas_extraordinarias_acumuladas'];
             if (is_string($timeValue) && strpos($timeValue, ':') !== false) {
-                $partes = explode(':', $timeValue);
-                $horasGuardadas = (int)($partes[0] ?? 0);
-                $minutosGuardados = (int)($partes[1] ?? 0);
-                $horasAcumuladasGuardadas = $horasGuardadas + ($minutosGuardados >= 30 ? 1 : 0);
+                // Mantener el formato HH:MM para mostrar
+                $horasAcumuladasGuardadas = substr($timeValue, 0, 5); // Toma HH:MM
             } else {
-                $horasAcumuladasGuardadas = (int)$timeValue;
+                // Si es un número, convertir a HH:MM
+                $horasTotales = (int)$timeValue;
+                $horasAcumuladasGuardadas = sprintf('%02d:00', $horasTotales);
             }
         }
         
-        // Usar valor guardado si existe, sino usar el calculado
-        $horasAcumuladasMostrar = $horasAcumuladasGuardadas ?? $totalHorasCalculado;
+        // Si no hay valor guardado, calcular desde las jornadas (convertir minutos a HH:MM)
+        if ($horasAcumuladasGuardadas === null && $totalMinutosCalculado > 0) {
+            $horasTotales = (int)($totalMinutosCalculado / 60);
+            $minutosRestantes = $totalMinutosCalculado % 60;
+            $horasAcumuladasMostrar = sprintf('%02d:%02d', $horasTotales, $minutosRestantes);
+        } else {
+            $horasAcumuladasMostrar = $horasAcumuladasGuardadas ?? '00:00';
+        }
     } catch (Exception $e) {
         mostrarMensaje("Error al procesar jornadas: " . $e->getMessage(), 'error');
     }
@@ -447,7 +453,21 @@ if ($mensaje): ?>
                             }
                             ?>
                         </td>
-                        <td><strong><?php echo $jornada['horas_totales'] ?? '-'; ?></strong></td>
+                        <td><strong>
+                            <?php 
+                            if (!empty($jornada['horas_totales'])) {
+                                // Formatear para mostrar solo HH:MM (sin segundos)
+                                $horasTotales = $jornada['horas_totales'];
+                                if (strlen($horasTotales) >= 5) {
+                                    echo substr($horasTotales, 0, 5); // Toma solo HH:MM
+                                } else {
+                                    echo $horasTotales;
+                                }
+                            } else {
+                                echo '-';
+                            }
+                            ?>
+                        </strong></td>
                         <td><?php echo htmlspecialchars(substr($jornada['justificacion'], 0, 50)); ?><?php echo strlen($jornada['justificacion']) > 50 ? '...' : ''; ?></td>
                         <td><?php echo date('d/m/Y H:i', strtotime($jornada['fecha_registro'])); ?></td>
                     </tr>
@@ -464,19 +484,19 @@ if ($mensaje): ?>
         <div>
             <strong>Horas Extraordinarias Acumuladas:</strong>
             <span id="horas-acumuladas-display" 
-                  style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; color: #1976D2; cursor: pointer; padding: 0.25rem 0.5rem; border-bottom: 1px dashed #1976D2;"
+                  style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; color: #1976D2; cursor: pointer; padding: 0.25rem 0.5rem; border-bottom: 1px dashed #1976D2;" 
                   onmouseover="this.style.background='#e3f2fd';" 
                   onmouseout="this.style.background='transparent';"
                   onclick="editarHorasAcumuladas()"
-                  title="Click para editar">
-                <?php echo (int)($horasAcumuladasMostrar ?? 0); ?>
+                  title="Click para editar (formato HH:MM)">
+                <?php echo htmlspecialchars($horasAcumuladasMostrar ?? '00:00'); ?>
             </span>
-            <input type="number" 
+            <input type="text" 
                    id="horas-acumuladas-input" 
-                   value="<?php echo (int)($horasAcumuladasMostrar ?? 0); ?>"
-                   min="0"
-                   step="1"
-                   style="display: none; font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; padding: 0.25rem 0.5rem; border: 1px solid #2196F3; border-radius: 3px; width: 80px; text-align: center;"
+                   value="<?php echo htmlspecialchars($horasAcumuladasMostrar ?? '00:00'); ?>"
+                   pattern="[0-9]{1,2}:[0-5][0-9]"
+                   placeholder="HH:MM"
+                   style="display: none; font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; padding: 0.25rem 0.5rem; border: 1px solid #2196F3; border-radius: 3px; width: 100px; text-align: center;"
                    onblur="guardarHorasAcumuladas()"
                    onkeydown="if(event.key === 'Enter') { event.preventDefault(); guardarHorasAcumuladas(); } if(event.key === 'Escape') cancelarEdicion();">
             <button id="btn-guardar-horas" 
@@ -488,7 +508,7 @@ if ($mensaje): ?>
         </div>
     </div>
     <input type="hidden" id="cedula-funcionario" value="<?php echo htmlspecialchars($funcionario['cedula'], ENT_QUOTES); ?>">
-    <input type="hidden" id="horas-acumuladas-original" value="<?php echo (int)($horasAcumuladasMostrar ?? 0); ?>">
+    <input type="hidden" id="horas-acumuladas-original" value="<?php echo htmlspecialchars($horasAcumuladasMostrar ?? '00:00'); ?>">
     <?php endif; ?>
 </div>
 
@@ -650,10 +670,23 @@ function guardarHorasAcumuladas() {
     const cedula = document.getElementById('cedula-funcionario').value;
     const mensaje = document.getElementById('mensaje-horas');
     
-    const horasValue = parseInt(input.value);
+    // Validar formato HH:MM
+    const horasValue = input.value.trim();
+    const regexHoras = /^([0-9]{1,2}):([0-5][0-9])$/;
     
-    if (isNaN(horasValue) || horasValue < 0) {
-        alert('Por favor ingrese un número válido (mayor o igual a 0)');
+    if (!regexHoras.test(horasValue)) {
+        alert('Por favor ingrese un formato válido (HH:MM). Ejemplo: 33:30');
+        input.focus();
+        return;
+    }
+    
+    // Validar que horas no exceda 838 (límite de TIME en MySQL)
+    const partes = horasValue.split(':');
+    const horas = parseInt(partes[0]);
+    const minutos = parseInt(partes[1]);
+    
+    if (horas > 838) {
+        alert('El valor de horas no puede exceder 838 horas (límite de MySQL TIME)');
         input.focus();
         return;
     }
@@ -662,8 +695,8 @@ function guardarHorasAcumuladas() {
     btnGuardar.disabled = true;
     btnGuardar.textContent = 'Guardando...';
     
-    // Convertir horas a formato TIME (HH:MM:SS) para guardar en BD
-    const horasFormatoTime = String(horasValue).padStart(2, '0') + ':00:00';
+    // Convertir a formato TIME (HH:MM:SS) para guardar en BD
+    const horasFormatoTime = String(horas).padStart(2, '0') + ':' + String(minutos).padStart(2, '0') + ':00';
     
     // Enviar petición AJAX
     fetch('<?php echo BASE_URL; ?>/forms/permisos/actualizar_horas_extraordinarias_acumuladas.php', {
@@ -679,7 +712,7 @@ function guardarHorasAcumuladas() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Actualizar display con nuevo valor (solo número)
+            // Actualizar display con nuevo valor (formato HH:MM)
             display.textContent = horasValue;
             
             // Actualizar valor original

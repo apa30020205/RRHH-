@@ -70,6 +70,7 @@ try {
     $fechas = $_POST['fechas'];
     $registrosGuardados = 0;
     $errores = [];
+    $minutosNuevosTotales = 0; // Suma de minutos totales de las jornadas guardadas exitosamente (sin redondear)
     
     // Procesar cada fecha
     foreach ($fechas as $index => $fechaData) {
@@ -135,6 +136,23 @@ try {
             
             $registrosGuardados++;
             
+            // Calcular minutos de esta jornada y sumar al total (sin redondear)
+            $horaDesdeObj = DateTime::createFromFormat('H:i:s', $horaDesde);
+            $horaHastaObj = DateTime::createFromFormat('H:i:s', $horaHasta);
+            
+            if ($horaDesdeObj && $horaHastaObj) {
+                // Si hora_hasta es menor que hora_desde, asumir que es al día siguiente
+                if ($horaHastaObj < $horaDesdeObj) {
+                    $horaHastaObj->modify('+1 day');
+                }
+                
+                $diferencia = $horaHastaObj->diff($horaDesdeObj);
+                $horas = (int)$diferencia->format('%h');
+                $minutos = (int)$diferencia->format('%i');
+                // Acumular minutos totales (sin redondear)
+                $minutosNuevosTotales += ($horas * 60) + $minutos;
+            }
+            
         } catch (PDOException $e) {
             // Si es error de duplicado, continuar con el siguiente
             if ($e->getCode() == 23000) {
@@ -142,6 +160,67 @@ try {
             } else {
                 $errores[] = "Fila " . ($index + 1) . ": Error al guardar - " . $e->getMessage();
             }
+        }
+    }
+    
+    // Actualizar horas_extraordinarias_acumuladas si se guardaron jornadas
+    if ($registrosGuardados > 0 && $minutosNuevosTotales > 0) {
+        try {
+            // Obtener valor actual de horas_extraordinarias_acumuladas
+            $stmtHorasActual = $db->prepare("
+                SELECT horas_extraordinarias_acumuladas 
+                FROM funcionarios 
+                WHERE cedula = ?
+            ");
+            $stmtHorasActual->execute([$cedulaParaGuardar]);
+            $resultado = $stmtHorasActual->fetch();
+            
+            $minutosActuales = 0;
+            if (!empty($resultado['horas_extraordinarias_acumuladas'])) {
+                // Convertir TIME a minutos totales
+                $timeValue = $resultado['horas_extraordinarias_acumuladas'];
+                if (is_string($timeValue) && strpos($timeValue, ':') !== false) {
+                    $partes = explode(':', $timeValue);
+                    $horas = (int)($partes[0] ?? 0);
+                    $minutos = (int)($partes[1] ?? 0);
+                    $minutosActuales = ($horas * 60) + $minutos;
+                } else {
+                    // Si es un número, asumir que son horas y convertir a minutos
+                    $minutosActuales = (int)$timeValue * 60;
+                }
+            }
+            
+            // Sumar nuevos minutos a los existentes
+            $minutosTotalesNuevos = $minutosActuales + $minutosNuevosTotales;
+            
+            // Convertir minutos totales a horas y minutos para guardar como TIME (HH:MM:00)
+            $horasTotales = (int)($minutosTotalesNuevos / 60);
+            $minutosRestantes = $minutosTotalesNuevos % 60;
+            
+            // Verificar si existe la columna antes de actualizar
+            $stmtCheckCol = $db->query("
+                SELECT COUNT(*) as existe
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = 'funcionarios'
+                AND COLUMN_NAME = 'horas_extraordinarias_acumuladas'
+            ");
+            $columnaExiste = $stmtCheckCol->fetch()['existe'] > 0;
+            
+            if ($columnaExiste) {
+                // Actualizar campo (convertir a formato TIME HH:MM:00)
+                $horasTimeFormat = sprintf('%02d:%02d:00', $horasTotales, $minutosRestantes);
+                $stmtUpdate = $db->prepare("
+                    UPDATE funcionarios 
+                    SET horas_extraordinarias_acumuladas = ?
+                    WHERE cedula = ?
+                ");
+                $stmtUpdate->execute([$horasTimeFormat, $cedulaParaGuardar]);
+            }
+        } catch (Exception $e) {
+            // Si falla la actualización de horas acumuladas, no bloquear el proceso
+            // Solo registrar en errores (opcional) o ignorar silenciosamente
+            error_log("Error al actualizar horas_extraordinarias_acumuladas: " . $e->getMessage());
         }
     }
     
