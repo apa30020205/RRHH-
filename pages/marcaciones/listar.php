@@ -551,6 +551,7 @@ try {
     $totalRegistros = 0;
     $totalHorasTrabajadas = '00:00:00';
     $totalTardanzas = '00:00:00';
+    $totalJornadasExtra = '00:00:00';
     $nombreFuncionario = '';
     $nombreCompleto = '';
     $hEntrada = '08:00:00';
@@ -1581,6 +1582,23 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
         $stmtJornadas->execute($paramsJornadas);
         $jornadasExtraordinarias = $stmtJornadas->fetchAll();
         
+        // Calcular total de jornadas extraordinarias del período
+        $totalJornadasExtraMinutos = 0;
+        foreach ($jornadasExtraordinarias as $jornada) {
+            if (!empty($jornada['horas_totales'])) {
+                // Parsear horas extraordinarias (formato HH:MM:SS o HH:MM)
+                $horasTotalesExtra = $jornada['horas_totales'];
+                $partesExtra = explode(':', $horasTotalesExtra);
+                $horasExtra = (int)($partesExtra[0] ?? 0);
+                $minutosExtra = (int)($partesExtra[1] ?? 0);
+                $totalJornadasExtraMinutos += ($horasExtra * 60) + $minutosExtra;
+            }
+        }
+        // Convertir minutos totales a formato HH:MM:00
+        $horasExtraTotal = floor($totalJornadasExtraMinutos / 60);
+        $minutosExtraTotal = $totalJornadasExtraMinutos % 60;
+        $totalJornadasExtra = sprintf('%02d:%02d:00', $horasExtraTotal, $minutosExtraTotal);
+        
         if (count($jornadasExtraordinarias) > 0):
 ?>
 <style>
@@ -1712,6 +1730,28 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
             <?php endforeach; ?>
         </tbody>
     </table>
+    
+    <!-- Sumatoria de Horas Extraordinarias del Período - Debajo de la tabla -->
+    <div style="margin-top: 1rem; color: #666; display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;">
+        <div>
+            <strong>Total Jornadas Extraordinarias del Período:</strong>
+            <span style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; color: #1976D2;">
+                <?php 
+                // Mostrar el valor formateado (ya viene en formato HH:MM:SS)
+                if (!empty($totalJornadasExtra)) {
+                    // Extraer horas y minutos del string
+                    $partes = explode(':', $totalJornadasExtra);
+                    $horasInt = (int)($partes[0] ?? 0);
+                    $minutosInt = (int)($partes[1] ?? 0);
+                    // Mostrar en formato HH:MM
+                    echo sprintf('%d:%02d', $horasInt, $minutosInt);
+                } else {
+                    echo '00:00';
+                }
+                ?>
+            </span>
+        </div>
+    </div>
 </div>
 
 <?php 

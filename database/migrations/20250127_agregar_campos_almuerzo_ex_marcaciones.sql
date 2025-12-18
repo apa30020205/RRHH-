@@ -59,3 +59,5 @@ DEALLOCATE PREPARE stmt;
 
 -- Verificar que los campos se agregaron correctamente
 DESCRIBE `ex_marcaciones`;
+
+
