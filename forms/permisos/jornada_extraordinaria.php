@@ -419,6 +419,7 @@ if ($mensaje): ?>
                     <th>Horas Totales</th>
                     <th>Justificación</th>
                     <th>Fecha Registro</th>
+                    <th>Acción</th>
                 </tr>
             </thead>
             <tbody>
@@ -470,6 +471,13 @@ if ($mensaje): ?>
                         </strong></td>
                         <td><?php echo htmlspecialchars(substr($jornada['justificacion'], 0, 50)); ?><?php echo strlen($jornada['justificacion']) > 50 ? '...' : ''; ?></td>
                         <td><?php echo date('d/m/Y H:i', strtotime($jornada['fecha_registro'])); ?></td>
+                        <td>
+                            <a href="<?php echo BASE_URL; ?>/forms/permisos/eliminar_jornada_extraordinaria.php?id_jornada=<?php echo $jornada['id_jornada']; ?>&cedula=<?php echo urlencode($funcionario['cedula'] ?? ''); ?>&fecha_desde=<?php echo urlencode($fechaDesdeFiltro ?? ''); ?>&fecha_hasta=<?php echo urlencode($fechaHastaFiltro ?? ''); ?>" 
+                               style="color: #dc3545; text-decoration: none;"
+                               onclick="return confirm('¿Eliminarás registro sí o no?')">
+                                <i class="fas fa-trash" style="color: #dc3545;"></i> <span style="color: #dc3545;">Eliminar</span>
+                            </a>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>

@@ -669,6 +669,7 @@ if ($mensaje): ?>
                     <th>Motivo</th>
                     <th>Especifique</th>
                     <th>Fecha Registro</th>
+                    <th>Acción</th>
                 </tr>
             </thead>
             <tbody>
@@ -731,6 +732,13 @@ if ($mensaje): ?>
                         ?></td>
                         <td><?php echo htmlspecialchars(substr($permiso['especifique'] ?? '', 0, 50)); ?><?php echo strlen($permiso['especifique'] ?? '') > 50 ? '...' : ''; ?></td>
                         <td><?php echo date('d/m/Y H:i', strtotime($permiso['fecha_registro'])); ?></td>
+                        <td>
+                            <a href="<?php echo BASE_URL; ?>/forms/permisos/eliminar_solicitud_permiso.php?id_permiso=<?php echo $permiso['id_permiso']; ?>&cedula=<?php echo urlencode($funcionario['cedula'] ?? ''); ?>&fecha_desde=<?php echo urlencode($fechaDesdeFiltro ?? ''); ?>&fecha_hasta=<?php echo urlencode($fechaHastaFiltro ?? ''); ?>" 
+                               style="color: #dc3545; text-decoration: none;"
+                               onclick="return confirm('¿Eliminarás registro sí o no?')">
+                                <i class="fas fa-trash" style="color: #dc3545;"></i> <span style="color: #dc3545;">Eliminar</span>
+                            </a>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
