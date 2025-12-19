@@ -1998,7 +1998,14 @@ if (!empty($marcaciones) && (!empty($fechaDesde) || !empty($fechaHasta) || !empt
                         }
                         ?>
                     </strong></td>
-                    <td><?php echo htmlspecialchars($permiso['motivo']); ?></td>
+                    <td><?php 
+                            $motivoTexto = htmlspecialchars($permiso['motivo']);
+                            if (isset($permiso['motivo']) && $permiso['motivo'] === 'Permiso InJustificado') {
+                                echo '<span style="color: #dc3545; font-weight: bold;">' . $motivoTexto . '</span>';
+                            } else {
+                                echo $motivoTexto;
+                            }
+                        ?></td>
                     <td><?php echo htmlspecialchars(substr($permiso['especifique'] ?? '', 0, 50)); ?><?php echo strlen($permiso['especifique'] ?? '') > 50 ? '...' : ''; ?></td>
                 </tr>
             <?php endforeach; ?>
