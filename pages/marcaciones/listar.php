@@ -101,6 +101,23 @@ try {
     $tieneAlmuerzoEntrada = in_array('almuerzo_entrada', $existingColumns);
     $tieneTodasMarcaciones = in_array('todas_marcaciones', $existingColumns);
     
+    // Verificar si la columna permiso_justificado existe (debe estar disponible en todo el archivo)
+    $columnaPermisoJustificadoExiste = false;
+    try {
+        $stmtCheckColPermisoJustificado = $db->query("
+            SELECT COUNT(*) as existe
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'permisos'
+            AND COLUMN_NAME = 'permiso_justificado'
+        ");
+        $result = $stmtCheckColPermisoJustificado->fetch();
+        $columnaPermisoJustificadoExiste = ($result && isset($result['existe']) && $result['existe'] > 0);
+    } catch (Exception $e) {
+        // Si hay error, asumir que la columna no existe
+        $columnaPermisoJustificadoExiste = false;
+    }
+    
     // Construir SELECT dinámicamente según las columnas disponibles
     $camposAlmuerzo = '';
     if ($tieneAlmuerzoSalida && $tieneAlmuerzoEntrada) {
@@ -1761,13 +1778,23 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
     }
 endif;
 
+// Inicializar variables de permisos (deben estar disponibles en todo el archivo)
+$totalPermisosInjustificados = '00:00:00';
+$totalPermisosInjustificadosMinutos = 0;
+$permisosPeriodo = [];
+
 // Obtener permisos del período (solo si hay marcaciones y el período está definido)
 if (!empty($marcaciones) && (!empty($fechaDesde) || !empty($fechaHasta) || !empty($cedulaFiltro))):
     try {
+        // $columnaPermisoJustificadoExiste ya está inicializada al inicio del archivo
+        
         $sqlPermisos = "SELECT p.id_permiso, p.cedula, p.motivo, p.especifique, 
                                p.fecha_desde, p.hora_desde, p.fecha_hasta, p.hora_hasta,
-                               p.horas_totales, p.fecha_registro,
-                               f.nombre, f.apellido,
+                               p.horas_totales, p.fecha_registro";
+        if ($columnaPermisoJustificadoExiste) {
+            $sqlPermisos .= ", p.permiso_justificado";
+        }
+        $sqlPermisos .= ", f.nombre, f.apellido,
                                CASE WHEN m.id_marcacion IS NOT NULL THEN 1 ELSE 0 END as tiene_marcacion
                         FROM permisos p
                         LEFT JOIN funcionarios f ON p.cedula = f.cedula
@@ -1805,19 +1832,32 @@ if (!empty($marcaciones) && (!empty($fechaDesde) || !empty($fechaHasta) || !empt
         
         // Calcular total de permisos del período
         $totalPermisosMinutos = 0;
+        $totalPermisosInjustificadosMinutos = 0;
         foreach ($permisosPeriodo as $permiso) {
             if (!empty($permiso['horas_totales'])) {
                 $horasTotalesPermiso = $permiso['horas_totales'];
                 $partesPermiso = explode(':', $horasTotalesPermiso);
                 $horasPermiso = (int)($partesPermiso[0] ?? 0);
                 $minutosPermiso = (int)($partesPermiso[1] ?? 0);
-                $totalPermisosMinutos += ($horasPermiso * 60) + $minutosPermiso;
+                $minutosTotales = ($horasPermiso * 60) + $minutosPermiso;
+                
+                // Acumular según si es justificado o no (solo si la columna existe)
+                if ($columnaPermisoJustificadoExiste && isset($permiso['permiso_justificado']) && $permiso['permiso_justificado'] == 0) {
+                    $totalPermisosInjustificadosMinutos += $minutosTotales;
+                } else {
+                    $totalPermisosMinutos += $minutosTotales;
+                }
             }
         }
         // Convertir minutos totales a formato HH:MM:00
         $horasPermisosTotal = floor($totalPermisosMinutos / 60);
         $minutosPermisosTotal = $totalPermisosMinutos % 60;
         $totalPermisos = sprintf('%02d:%02d:00', $horasPermisosTotal, $minutosPermisosTotal);
+        
+        // Convertir minutos injustificados a formato HH:MM:00
+        $horasPermisosInjustificadosTotal = floor($totalPermisosInjustificadosMinutos / 60);
+        $minutosPermisosInjustificadosTotal = $totalPermisosInjustificadosMinutos % 60;
+        $totalPermisosInjustificados = sprintf('%02d:%02d:00', $horasPermisosInjustificadosTotal, $minutosPermisosInjustificadosTotal);
         
         if (count($permisosPeriodo) > 0):
 ?>
@@ -1874,6 +1914,15 @@ if (!empty($marcaciones) && (!empty($fechaDesde) || !empty($fechaHasta) || !empt
     color: #2e7d32;
     font-weight: 500;
 }
+
+.permisos-periodo-table tr.permiso-injustificado {
+    background-color: #ffcccc !important;
+}
+
+.permisos-periodo-table tr.permiso-injustificado td {
+    color: #721c24;
+    font-weight: 500;
+}
 </style>
 
 <div class="permisos-periodo-section">
@@ -1896,7 +1945,11 @@ if (!empty($marcaciones) && (!empty($fechaDesde) || !empty($fechaHasta) || !empt
         </thead>
         <tbody>
             <?php foreach ($permisosPeriodo as $permiso):
+                // Determinar clase según si tiene marcación Y si es injustificado
                 $claseFila = $permiso['tiene_marcacion'] ? 'permiso-con-marcacion' : 'permiso-sin-marcacion';
+                if ($columnaPermisoJustificadoExiste && isset($permiso['permiso_justificado']) && $permiso['permiso_justificado'] == 0) {
+                    $claseFila = 'permiso-injustificado';
+                }
             ?>
                 <tr class="<?php echo $claseFila; ?>">
                     <?php if (empty($cedulaFiltro)): ?>
@@ -1969,6 +2022,24 @@ if (!empty($marcaciones) && (!empty($fechaDesde) || !empty($fechaHasta) || !empt
                 ?>
             </span>
         </div>
+        
+        <?php if ($columnaPermisoJustificadoExiste && isset($totalPermisosInjustificados)): ?>
+        <div>
+            <strong style="color: #dc3545;">Total Permisos Injustificados del Período:</strong>
+            <span style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; color: #dc3545;">
+                <?php
+                if (!empty($totalPermisosInjustificados)) {
+                    $partesInjust = explode(':', $totalPermisosInjustificados);
+                    $horasIntInjust = (int)($partesInjust[0] ?? 0);
+                    $minutosIntInjust = (int)($partesInjust[1] ?? 0);
+                    echo sprintf('%d:%02d', $horasIntInjust, $minutosIntInjust);
+                } else {
+                    echo '00:00';
+                }
+                ?>
+            </span>
+        </div>
+        <?php endif; ?>
     </div>
 </div>
 

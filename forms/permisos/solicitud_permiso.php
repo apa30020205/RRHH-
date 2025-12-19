@@ -20,6 +20,23 @@ $funcionario = null;
 $busqueda = '';
 $permisos = [];
 
+// Verificar si la columna permiso_justificado existe (debe estar disponible en todo el archivo)
+$columnaPermisoJustificadoExiste = false;
+try {
+    $dbCheck = Database::getInstance()->getConnection();
+    $stmtCheckColPermisoJustificado = $dbCheck->query("
+        SELECT COUNT(*) as existe
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'permisos'
+        AND COLUMN_NAME = 'permiso_justificado'
+    ");
+    $columnaPermisoJustificadoExiste = $stmtCheckColPermisoJustificado->fetch()['existe'] > 0;
+} catch (Exception $e) {
+    // Si hay error, asumir que la columna no existe
+    $columnaPermisoJustificadoExiste = false;
+}
+
 // Procesar búsqueda de funcionario
 // Permitir búsqueda por cédula, nombre o apellido
 $busqueda = isset($_GET['buscar']) ? trim($_GET['buscar']) : '';
@@ -58,6 +75,7 @@ $fechaHastaFiltro = isset($_GET['fecha_hasta']) ? $_GET['fecha_hasta'] : '';
 
 // Variable para almacenar permisos acumulados (se calculará después si hay funcionario)
 $permisosAcumuladosMostrar = null;
+$permisosInjustificadosAcumuladosMostrar = null;
 
 if ($funcionario) {
     try {
@@ -66,8 +84,11 @@ if ($funcionario) {
         
         // Cargar permisos para la tabla (aplicar filtro de fechas si existe)
         $sql = "SELECT id_permiso, motivo, especifique, fecha_desde, hora_desde, 
-                       fecha_hasta, hora_hasta, horas_totales, fecha_registro, estado
-                FROM permisos
+                       fecha_hasta, hora_hasta, horas_totales, fecha_registro, estado";
+        if ($columnaPermisoJustificadoExiste) {
+            $sql .= ", permiso_justificado";
+        }
+        $sql .= " FROM permisos
                 WHERE cedula = ? AND estado = 'activa'";
         $params = [$cedulaBD];
         
@@ -88,24 +109,66 @@ if ($funcionario) {
         $permisos = $stmtPermisos->fetchAll();
         
         // Calcular sumatoria de TODOS los permisos activos (sin filtro de fechas)
-        $stmtTodosPermisos = $db->prepare("
-            SELECT horas_totales
-            FROM permisos
-            WHERE cedula = ? AND estado = 'activa'
-        ");
-        $stmtTodosPermisos->execute([$cedulaBD]);
-        $todosPermisos = $stmtTodosPermisos->fetchAll();
-        
-        // Calcular sumatoria de minutos totales (sin redondear)
-        $totalMinutosCalculado = 0;
-        foreach ($todosPermisos as $permiso) {
-            if (!empty($permiso['horas_totales'])) {
-                $partes = explode(':', $permiso['horas_totales']);
-                $horas = (int)($partes[0] ?? 0);
-                $minutos = (int)($partes[1] ?? 0);
-                // Sumar minutos totales (sin redondear)
-                $totalMinutosCalculado += ($horas * 60) + $minutos;
+        if ($columnaPermisoJustificadoExiste) {
+            // Si la columna existe, separar justificados e injustificados
+            $stmtTodosPermisosJustificados = $db->prepare("
+                SELECT horas_totales
+                FROM permisos
+                WHERE cedula = ? AND estado = 'activa' AND permiso_justificado = 1
+            ");
+            $stmtTodosPermisosJustificados->execute([$cedulaBD]);
+            $todosPermisosJustificados = $stmtTodosPermisosJustificados->fetchAll();
+            
+            // Calcular sumatoria de minutos totales justificados (sin redondear)
+            $totalMinutosCalculado = 0;
+            foreach ($todosPermisosJustificados as $permiso) {
+                if (!empty($permiso['horas_totales'])) {
+                    $partes = explode(':', $permiso['horas_totales']);
+                    $horas = (int)($partes[0] ?? 0);
+                    $minutos = (int)($partes[1] ?? 0);
+                    $totalMinutosCalculado += ($horas * 60) + $minutos;
+                }
             }
+            
+            // Calcular sumatoria de TODOS los permisos activos injustificados
+            $stmtTodosPermisosInjustificados = $db->prepare("
+                SELECT horas_totales
+                FROM permisos
+                WHERE cedula = ? AND estado = 'activa' AND permiso_justificado = 0
+            ");
+            $stmtTodosPermisosInjustificados->execute([$cedulaBD]);
+            $todosPermisosInjustificados = $stmtTodosPermisosInjustificados->fetchAll();
+            
+            // Calcular sumatoria de minutos totales injustificados
+            $totalMinutosCalculadoInjustificados = 0;
+            foreach ($todosPermisosInjustificados as $permiso) {
+                if (!empty($permiso['horas_totales'])) {
+                    $partes = explode(':', $permiso['horas_totales']);
+                    $horas = (int)($partes[0] ?? 0);
+                    $minutos = (int)($partes[1] ?? 0);
+                    $totalMinutosCalculadoInjustificados += ($horas * 60) + $minutos;
+                }
+            }
+        } else {
+            // Si la columna no existe, todos los permisos son justificados
+            $stmtTodosPermisos = $db->prepare("
+                SELECT horas_totales
+                FROM permisos
+                WHERE cedula = ? AND estado = 'activa'
+            ");
+            $stmtTodosPermisos->execute([$cedulaBD]);
+            $todosPermisos = $stmtTodosPermisos->fetchAll();
+            
+            $totalMinutosCalculado = 0;
+            foreach ($todosPermisos as $permiso) {
+                if (!empty($permiso['horas_totales'])) {
+                    $partes = explode(':', $permiso['horas_totales']);
+                    $horas = (int)($partes[0] ?? 0);
+                    $minutos = (int)($partes[1] ?? 0);
+                    $totalMinutosCalculado += ($horas * 60) + $minutos;
+                }
+            }
+            $totalMinutosCalculadoInjustificados = 0;
         }
         
         // Obtener valor guardado en funcionarios si existe
@@ -131,13 +194,57 @@ if ($funcionario) {
             }
         }
         
-        // Si no hay valor guardado, calcular desde los permisos (convertir minutos a HH:MM)
+        // Si no hay valor guardado, calcular desde los permisos justificados (convertir minutos a HH:MM)
         if ($permisosAcumuladosGuardados === null && $totalMinutosCalculado > 0) {
             $horasTotales = (int)($totalMinutosCalculado / 60);
             $minutosRestantes = $totalMinutosCalculado % 60;
             $permisosAcumuladosMostrar = sprintf('%02d:%02d', $horasTotales, $minutosRestantes);
         } else {
             $permisosAcumuladosMostrar = $permisosAcumuladosGuardados ?? '00:00';
+        }
+        
+        // Obtener valor guardado de permisos injustificados acumulados si existe (solo si las columnas existen)
+        $permisosInjustificadosAcumuladosMostrar = '00:00';
+        if ($columnaPermisoJustificadoExiste) {
+            // Verificar si la columna permisos_injustificados_acumulados existe
+            $stmtCheckColInjustAcum = $db->query("
+                SELECT COUNT(*) as existe
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = 'funcionarios'
+                AND COLUMN_NAME = 'permisos_injustificados_acumulados'
+            ");
+            $columnaInjustAcumExiste = $stmtCheckColInjustAcum->fetch()['existe'] > 0;
+            
+            if ($columnaInjustAcumExiste) {
+                $stmtPermisosInjustAcum = $db->prepare("
+                    SELECT permisos_injustificados_acumulados 
+                    FROM funcionarios 
+                    WHERE cedula = ?
+                ");
+                $stmtPermisosInjustAcum->execute([$cedulaBD]);
+                $resultadoPermisosInjust = $stmtPermisosInjustAcum->fetch();
+                $permisosInjustificadosAcumuladosGuardados = null;
+                
+                if (!empty($resultadoPermisosInjust['permisos_injustificados_acumulados'])) {
+                    $timeValue = $resultadoPermisosInjust['permisos_injustificados_acumulados'];
+                    if (is_string($timeValue) && strpos($timeValue, ':') !== false) {
+                        $permisosInjustificadosAcumuladosGuardados = substr($timeValue, 0, 5);
+                    } else {
+                        $horasTotales = (int)$timeValue;
+                        $permisosInjustificadosAcumuladosGuardados = sprintf('%02d:00', $horasTotales);
+                    }
+                }
+                
+                // Si no hay valor guardado, calcular desde los permisos injustificados
+                if ($permisosInjustificadosAcumuladosGuardados === null && $totalMinutosCalculadoInjustificados > 0) {
+                    $horasTotales = (int)($totalMinutosCalculadoInjustificados / 60);
+                    $minutosRestantes = $totalMinutosCalculadoInjustificados % 60;
+                    $permisosInjustificadosAcumuladosMostrar = sprintf('%02d:%02d', $horasTotales, $minutosRestantes);
+                } else {
+                    $permisosInjustificadosAcumuladosMostrar = $permisosInjustificadosAcumuladosGuardados ?? '00:00';
+                }
+            }
         }
     } catch (Exception $e) {
         mostrarMensaje("Error al procesar permisos: " . $e->getMessage(), 'error');
@@ -342,6 +449,15 @@ if ($mensaje): ?>
         background: #f8f9fa;
     }
     
+    .permisos-table tr.permiso-injustificado {
+        background-color: #ffcccc !important;
+    }
+    
+    .permisos-table tr.permiso-injustificado td {
+        color: #721c24;
+        font-weight: 500;
+    }
+    
     .filter-section {
         margin-bottom: 1rem;
         padding: 1rem;
@@ -449,6 +565,10 @@ if ($mensaje): ?>
                     <input type="radio" id="motivo_otros" name="motivo" value="Otros asuntos personales" required>
                     <label for="motivo_otros">Otros asuntos personales</label>
                 </div>
+                <div class="motivo-option">
+                    <input type="radio" id="motivo_permiso_injustificado" name="motivo" value="Permiso InJustificado" required>
+                    <label for="motivo_permiso_injustificado" style="color: #dc3545; font-weight: bold;">Permiso InJustificado</label>
+                </div>
             </div>
             
             <div class="form-group" id="especifique-group" style="display: none;">
@@ -552,8 +672,13 @@ if ($mensaje): ?>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($permisos as $permiso): ?>
-                    <tr>
+                <?php foreach ($permisos as $permiso): 
+                    $claseInjustificado = '';
+                    if ($columnaPermisoJustificadoExiste && isset($permiso['permiso_justificado']) && $permiso['permiso_justificado'] == 0) {
+                        $claseInjustificado = 'permiso-injustificado';
+                    }
+                ?>
+                    <tr class="<?php echo $claseInjustificado; ?>">
                         <td><?php echo date('d/m/Y', strtotime($permiso['fecha_desde'])); ?></td>
                         <td>
                             <?php 
@@ -596,7 +721,14 @@ if ($mensaje): ?>
                             }
                             ?>
                         </strong></td>
-                        <td><?php echo htmlspecialchars($permiso['motivo']); ?></td>
+                        <td><?php 
+                            $motivoTexto = htmlspecialchars($permiso['motivo']);
+                            if (isset($permiso['motivo']) && $permiso['motivo'] === 'Permiso InJustificado') {
+                                echo '<span style="color: #dc3545; font-weight: bold;">' . $motivoTexto . '</span>';
+                            } else {
+                                echo $motivoTexto;
+                            }
+                        ?></td>
                         <td><?php echo htmlspecialchars(substr($permiso['especifique'] ?? '', 0, 50)); ?><?php echo strlen($permiso['especifique'] ?? '') > 50 ? '...' : ''; ?></td>
                         <td><?php echo date('d/m/Y H:i', strtotime($permiso['fecha_registro'])); ?></td>
                     </tr>
@@ -627,7 +759,7 @@ if ($mensaje): ?>
                    placeholder="HH:MM"
                    style="display: none; font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; padding: 0.25rem 0.5rem; border: 1px solid #4caf50; border-radius: 3px; width: 100px; text-align: center;"
                    onblur="guardarPermisosAcumulados()"
-                   onkeydown="if(event.key === 'Enter') { event.preventDefault(); guardarPermisosAcumulados(); } if(event.key === 'Escape') cancelarEdicion();">
+                   onkeydown="if(event.key === 'Enter') { event.preventDefault(); guardarPermisosAcumulados(); } if(event.key === 'Escape') cancelarEdicionPermisos();">
             <button id="btn-guardar-permisos" 
                     onclick="guardarPermisosAcumulados()" 
                     style="display: none; margin-left: 0.5rem; padding: 0.25rem 0.75rem; background: #4caf50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">
@@ -635,9 +767,38 @@ if ($mensaje): ?>
             </button>
             <span id="mensaje-permisos" style="color: #28a745; font-weight: bold; margin-left: 0.5rem;"></span>
         </div>
+        
+        <?php if ($columnaPermisoJustificadoExiste): ?>
+        <div>
+            <strong style="color: #dc3545;">Permisos Acumulados InJustificados:</strong>
+            <span id="permisos-injustificados-acumulados-display" 
+                  style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; color: #dc3545; cursor: pointer; padding: 0.25rem 0.5rem; border-bottom: 1px dashed #dc3545;" 
+                  onmouseover="this.style.background='#ffe6e6';" 
+                  onmouseout="this.style.background='transparent';"
+                  onclick="editarPermisosInjustificadosAcumulados()"
+                  title="Click para editar (formato HH:MM)">
+                <?php echo htmlspecialchars($permisosInjustificadosAcumuladosMostrar ?? '00:00'); ?>
+            </span>
+            <input type="text" 
+                   id="permisos-injustificados-acumulados-input" 
+                   value="<?php echo htmlspecialchars($permisosInjustificadosAcumuladosMostrar ?? '00:00'); ?>"
+                   pattern="[0-9]{1,2}:[0-5][0-9]"
+                   placeholder="HH:MM"
+                   style="display: none; font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; padding: 0.25rem 0.5rem; border: 1px solid #dc3545; border-radius: 3px; width: 100px; text-align: center;"
+                   onblur="guardarPermisosInjustificadosAcumulados()"
+                   onkeydown="if(event.key === 'Enter') { event.preventDefault(); guardarPermisosInjustificadosAcumulados(); } if(event.key === 'Escape') cancelarEdicionPermisosInjustificados();">
+            <button id="btn-guardar-permisos-injustificados" 
+                    onclick="guardarPermisosInjustificadosAcumulados()" 
+                    style="display: none; margin-left: 0.5rem; padding: 0.25rem 0.75rem; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">
+                Guardar
+            </button>
+            <span id="mensaje-permisos-injustificados" style="color: #28a745; font-weight: bold; margin-left: 0.5rem;"></span>
+        </div>
+        <?php endif; ?>
     </div>
     <input type="hidden" id="cedula-funcionario" value="<?php echo htmlspecialchars($funcionario['cedula'], ENT_QUOTES); ?>">
     <input type="hidden" id="permisos-acumulados-original" value="<?php echo htmlspecialchars($permisosAcumuladosMostrar ?? '00:00'); ?>">
+    <input type="hidden" id="permisos-injustificados-acumulados-original" value="<?php echo htmlspecialchars($permisosInjustificadosAcumuladosMostrar ?? '00:00'); ?>">
     <?php endif; ?>
 </div>
 
@@ -780,7 +941,7 @@ function editarPermisosAcumulados() {
     input.select();
 }
 
-function cancelarEdicion() {
+function cancelarEdicionPermisos() {
     const display = document.getElementById('permisos-acumulados-display');
     const input = document.getElementById('permisos-acumulados-input');
     const btnGuardar = document.getElementById('btn-guardar-permisos');
@@ -862,9 +1023,110 @@ function guardarPermisosAcumulados() {
         btnGuardar.textContent = 'Guardar';
     });
 }
+
+// Funciones para editar permisos injustificados acumulados
+function editarPermisosInjustificadosAcumulados() {
+    const display = document.getElementById('permisos-injustificados-acumulados-display');
+    const input = document.getElementById('permisos-injustificados-acumulados-input');
+    const btnGuardar = document.getElementById('btn-guardar-permisos-injustificados');
+    const mensaje = document.getElementById('mensaje-permisos-injustificados');
+    
+    display.style.display = 'none';
+    input.style.display = 'inline-block';
+    btnGuardar.style.display = 'inline-block';
+    mensaje.textContent = '';
+    input.focus();
+    input.select();
+}
+
+function cancelarEdicionPermisosInjustificados() {
+    const display = document.getElementById('permisos-injustificados-acumulados-display');
+    const input = document.getElementById('permisos-injustificados-acumulados-input');
+    const btnGuardar = document.getElementById('btn-guardar-permisos-injustificados');
+    const original = document.getElementById('permisos-injustificados-acumulados-original');
+    const mensaje = document.getElementById('mensaje-permisos-injustificados');
+    
+    input.value = original.value;
+    
+    display.style.display = 'inline';
+    input.style.display = 'none';
+    btnGuardar.style.display = 'none';
+    mensaje.textContent = '';
+}
+
+function guardarPermisosInjustificadosAcumulados() {
+    const input = document.getElementById('permisos-injustificados-acumulados-input');
+    const display = document.getElementById('permisos-injustificados-acumulados-display');
+    const btnGuardar = document.getElementById('btn-guardar-permisos-injustificados');
+    const cedula = document.getElementById('cedula-funcionario').value;
+    const mensaje = document.getElementById('mensaje-permisos-injustificados');
+    
+    const permisosValue = input.value.trim();
+    const regexPermisos = /^([0-9]{1,2}):([0-5][0-9])$/;
+    
+    if (!regexPermisos.test(permisosValue)) {
+        alert('Por favor ingrese un formato válido (HH:MM). Ejemplo: 33:30');
+        input.focus();
+        return;
+    }
+    
+    const partes = permisosValue.split(':');
+    const horas = parseInt(partes[0]);
+    const minutos = parseInt(partes[1]);
+    
+    if (horas > 838) {
+        alert('El valor de horas no puede exceder 838 horas (límite de MySQL TIME)');
+        input.focus();
+        return;
+    }
+    
+    btnGuardar.disabled = true;
+    btnGuardar.textContent = 'Guardando...';
+    
+    const permisosFormatoTime = String(horas).padStart(2, '0') + ':' + String(minutos).padStart(2, '0') + ':00';
+    
+    fetch('<?php echo BASE_URL; ?>/forms/permisos/actualizar_permisos_injustificados_acumulados.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            cedula: cedula,
+            permisos_injustificados_acumulados: permisosFormatoTime
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            display.textContent = permisosValue;
+            document.getElementById('permisos-injustificados-acumulados-original').value = permisosValue;
+            display.style.display = 'inline';
+            input.style.display = 'none';
+            btnGuardar.style.display = 'none';
+            mensaje.textContent = '✓ Guardado';
+            mensaje.style.color = '#28a745';
+            setTimeout(() => {
+                mensaje.textContent = '';
+            }, 2000);
+        } else {
+            alert('Error al guardar: ' + (data.error || 'Error desconocido'));
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Guardar';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error al guardar los permisos injustificados acumulados');
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = 'Guardar';
+    });
+}
 </script>
 
 <?php endif; ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
+
+
+
 

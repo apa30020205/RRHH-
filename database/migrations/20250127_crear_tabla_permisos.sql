@@ -45,3 +45,6 @@ CREATE TABLE IF NOT EXISTS `permisos` (
 -- Verificar que la tabla se creó correctamente
 DESCRIBE `permisos`;
 
+
+
+

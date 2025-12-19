@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Procesar Solicitud de Permiso
  * Sistema RRHH
@@ -12,7 +12,7 @@ require_once __DIR__ . '/../../roles_rrhh/classes/Auth.php';
 
 // Solo aceptar POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    mostrarMensaje("Método no permitido", 'error');
+    mostrarMensaje("MÃ©todo no permitido", 'error');
     redirect(BASE_URL . '/forms/permisos/solicitud_permiso.php');
 }
 
@@ -22,9 +22,9 @@ try {
     // Obtener usuario actual
     $usuarioId = $_SESSION['id_usuario'] ?? null;
     
-    // Validar cédula
+    // Validar cÃ©dula
     if (empty($_POST['cedula'])) {
-        throw new Exception("Cédula no proporcionada");
+        throw new Exception("CÃ©dula no proporcionada");
     }
     
     $cedula = trim($_POST['cedula']);
@@ -59,11 +59,11 @@ try {
     
     $motivo = trim($_POST['motivo']);
     $motivosValidos = ['Enfermedad', 'Duelo', 'Matrimonio', 'Nacimiento de hijos', 
-                       'Enfermedad de parientes cercanos', 'Eventos académicos puntuales', 
-                       'Otros asuntos personales'];
+                       'Enfermedad de parientes cercanos', 'Eventos acadÃ©micos puntuales', 
+                       'Otros asuntos personales', 'Permiso InJustificado'];
     
     if (!in_array($motivo, $motivosValidos)) {
-        throw new Exception("Motivo inválido");
+        throw new Exception("Motivo invÃ¡lido");
     }
     
     // Validar especifique si motivo es "Otros asuntos personales"
@@ -78,9 +78,9 @@ try {
         $especifique = null;
     }
     
-    // Validar que hay al menos un período
+    // Validar que hay al menos un perÃ­odo
     if (empty($_POST['periodos']) || !is_array($_POST['periodos'])) {
-        throw new Exception("Debe agregar al menos un período");
+        throw new Exception("Debe agregar al menos un perÃ­odo");
     }
     
     $periodos = $_POST['periodos'];
@@ -88,12 +88,12 @@ try {
     $errores = [];
     $minutosNuevosTotales = 0; // Suma de minutos totales de los permisos guardados exitosamente
     
-    // Procesar cada período
+    // Procesar cada perÃ­odo
     foreach ($periodos as $index => $periodoData) {
         // Validar campos requeridos
         if (empty($periodoData['fecha_desde']) || empty($periodoData['hora_desde']) || 
             empty($periodoData['fecha_hasta']) || empty($periodoData['hora_hasta'])) {
-            $errores[] = "Período " . ($index + 1) . ": Todos los campos son obligatorios";
+            $errores[] = "PerÃ­odo " . ($index + 1) . ": Todos los campos son obligatorios";
             continue;
         }
         
@@ -107,18 +107,18 @@ try {
         $fechaHastaObj = DateTime::createFromFormat('Y-m-d', $fechaHasta);
         
         if (!$fechaDesdeObj || $fechaDesdeObj->format('Y-m-d') !== $fechaDesde) {
-            $errores[] = "Período " . ($index + 1) . ": Fecha desde inválida";
+            $errores[] = "PerÃ­odo " . ($index + 1) . ": Fecha desde invÃ¡lida";
             continue;
         }
         
         if (!$fechaHastaObj || $fechaHastaObj->format('Y-m-d') !== $fechaHasta) {
-            $errores[] = "Período " . ($index + 1) . ": Fecha hasta inválida";
+            $errores[] = "PerÃ­odo " . ($index + 1) . ": Fecha hasta invÃ¡lida";
             continue;
         }
         
         // Validar que fecha_hasta >= fecha_desde
         if ($fechaHasta < $fechaDesde) {
-            $errores[] = "Período " . ($index + 1) . ": La fecha hasta debe ser mayor o igual que la fecha desde";
+            $errores[] = "PerÃ­odo " . ($index + 1) . ": La fecha hasta debe ser mayor o igual que la fecha desde";
             continue;
         }
         
@@ -127,13 +127,13 @@ try {
         $horaHastaObj = DateTime::createFromFormat('H:i', $horaHasta);
         
         if (!$horaDesdeObj || !$horaHastaObj) {
-            $errores[] = "Período " . ($index + 1) . ": Formato de hora inválido";
+            $errores[] = "PerÃ­odo " . ($index + 1) . ": Formato de hora invÃ¡lido";
             continue;
         }
         
         // Si las fechas son iguales, validar que hora_hasta > hora_desde
         if ($fechaDesde === $fechaHasta && $horaHasta <= $horaDesde) {
-            $errores[] = "Período " . ($index + 1) . ": Cuando las fechas son iguales, la hora hasta debe ser mayor que la hora desde";
+            $errores[] = "PerÃ­odo " . ($index + 1) . ": Cuando las fechas son iguales, la hora hasta debe ser mayor que la hora desde";
             continue;
         }
         
@@ -147,7 +147,7 @@ try {
         
         try {
             // Insertar en la base de datos
-            // Las horas_totales se calculan automáticamente por la columna GENERATED
+            // Las horas_totales se calculan automÃ¡ticamente por la columna GENERATED
             $stmt = $db->prepare("
                 INSERT INTO permisos 
                 (cedula, motivo, especifique, fecha_desde, hora_desde, fecha_hasta, hora_hasta, usuario_registro, estado)
@@ -178,7 +178,7 @@ try {
                 $horas = (int)$diferencia->format('%h');
                 $minutos = (int)$diferencia->format('%i');
                 
-                // Calcular minutos totales (días * 24 * 60 + horas * 60 + minutos)
+                // Calcular minutos totales (dÃ­as * 24 * 60 + horas * 60 + minutos)
                 $minutosTotales = ($dias * 24 * 60) + ($horas * 60) + $minutos;
                 $minutosNuevosTotales += $minutosTotales;
             }
@@ -186,9 +186,9 @@ try {
         } catch (PDOException $e) {
             // Si es error de duplicado, continuar con el siguiente
             if ($e->getCode() == 23000) {
-                $errores[] = "Período " . ($index + 1) . ": Ya existe un permiso para este período";
+                $errores[] = "PerÃ­odo " . ($index + 1) . ": Ya existe un permiso para este perÃ­odo";
             } else {
-                $errores[] = "Período " . ($index + 1) . ": Error al guardar - " . $e->getMessage();
+                $errores[] = "PerÃ­odo " . ($index + 1) . ": Error al guardar - " . $e->getMessage();
             }
         }
     }
@@ -215,7 +215,7 @@ try {
                     $minutos = (int)($partes[1] ?? 0);
                     $minutosActuales = ($horas * 60) + $minutos;
                 } else {
-                    // Si es un número, asumir que son horas y convertir a minutos
+                    // Si es un nÃºmero, asumir que son horas y convertir a minutos
                     $minutosActuales = (int)$timeValue * 60;
                 }
             }
@@ -248,7 +248,7 @@ try {
                 $stmtUpdate->execute([$permisosTimeFormat, $cedulaParaGuardar]);
             }
         } catch (Exception $e) {
-            // Si falla la actualización de permisos acumulados, no bloquear el proceso
+            // Si falla la actualizaciÃ³n de permisos acumulados, no bloquear el proceso
             error_log("Error al actualizar permisos_acumulados: " . $e->getMessage());
         }
     }
@@ -261,16 +261,16 @@ try {
         }
         mostrarMensaje($mensaje, count($errores) > 0 ? 'warning' : 'success');
     } else {
-        mostrarMensaje("No se pudo guardar ningún permiso. Errores: " . implode(", ", $errores), 'error');
+        mostrarMensaje("No se pudo guardar ningÃºn permiso. Errores: " . implode(", ", $errores), 'error');
     }
     
-    // Redirigir de vuelta al formulario con la cédula
+    // Redirigir de vuelta al formulario con la cÃ©dula
     redirect(BASE_URL . '/forms/permisos/solicitud_permiso.php?cedula=' . urlencode($cedula));
     
 } catch (Exception $e) {
     mostrarMensaje("Error: " . $e->getMessage(), 'error');
     
-    // Redirigir con cédula si está disponible
+    // Redirigir con cÃ©dula si estÃ¡ disponible
     $cedulaParam = isset($_POST['cedula']) ? '?cedula=' . urlencode($_POST['cedula']) : '';
     redirect(BASE_URL . '/forms/permisos/solicitud_permiso.php' . $cedulaParam);
 }

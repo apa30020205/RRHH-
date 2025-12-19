@@ -177,3 +177,6 @@ try {
     echo "<p class='error'>Error general: " . htmlspecialchars($e->getMessage()) . "</p>";
 }
 ?>
+
+
+
