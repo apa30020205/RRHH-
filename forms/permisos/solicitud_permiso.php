@@ -757,14 +757,14 @@ if ($mensaje): ?>
                   onmouseover="this.style.background='#c8e6c9';" 
                   onmouseout="this.style.background='transparent';"
                   onclick="editarPermisosAcumulados()"
-                  title="Click para editar (formato HH:MM)">
+                  title="Click para editar (formato HH:MM o solo número de horas)">
                 <?php echo htmlspecialchars($permisosAcumuladosMostrar ?? '00:00'); ?>
             </span>
             <input type="text" 
                    id="permisos-acumulados-input" 
                    value="<?php echo htmlspecialchars($permisosAcumuladosMostrar ?? '00:00'); ?>"
-                   pattern="[0-9]{1,2}:[0-5][0-9]"
-                   placeholder="HH:MM"
+                   pattern="[0-9]{1,3}:[0-5][0-9]|[0-9]+"
+                   placeholder="HH:MM o número"
                    style="display: none; font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; padding: 0.25rem 0.5rem; border: 1px solid #4caf50; border-radius: 3px; width: 100px; text-align: center;"
                    onblur="guardarPermisosAcumulados()"
                    onkeydown="if(event.key === 'Enter') { event.preventDefault(); guardarPermisosAcumulados(); } if(event.key === 'Escape') cancelarEdicionPermisos();">
@@ -784,14 +784,14 @@ if ($mensaje): ?>
                   onmouseover="this.style.background='#ffe6e6';" 
                   onmouseout="this.style.background='transparent';"
                   onclick="editarPermisosInjustificadosAcumulados()"
-                  title="Click para editar (formato HH:MM)">
+                  title="Click para editar (formato HH:MM o solo número de horas)">
                 <?php echo htmlspecialchars($permisosInjustificadosAcumuladosMostrar ?? '00:00'); ?>
             </span>
             <input type="text" 
                    id="permisos-injustificados-acumulados-input" 
                    value="<?php echo htmlspecialchars($permisosInjustificadosAcumuladosMostrar ?? '00:00'); ?>"
-                   pattern="[0-9]{1,2}:[0-5][0-9]"
-                   placeholder="HH:MM"
+                   pattern="[0-9]{1,3}:[0-5][0-9]|[0-9]+"
+                   placeholder="HH:MM o número"
                    style="display: none; font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; padding: 0.25rem 0.5rem; border: 1px solid #dc3545; border-radius: 3px; width: 100px; text-align: center;"
                    onblur="guardarPermisosInjustificadosAcumulados()"
                    onkeydown="if(event.key === 'Enter') { event.preventDefault(); guardarPermisosInjustificadosAcumulados(); } if(event.key === 'Escape') cancelarEdicionPermisosInjustificados();">
@@ -971,12 +971,31 @@ function guardarPermisosAcumulados() {
     const cedula = document.getElementById('cedula-funcionario').value;
     const mensaje = document.getElementById('mensaje-permisos');
     
-    const permisosValue = input.value.trim();
-    const regexPermisos = /^([0-9]{1,2}):([0-5][0-9])$/;
+    // Obtener valor y limpiar
+    let permisosValue = input.value.trim();
+    
+    // Si es solo un número, convertirlo a formato HH:MM (ej: "5" -> "05:00")
+    const regexSoloNumero = /^([0-9]+)$/;
+    if (regexSoloNumero.test(permisosValue)) {
+        const horas = parseInt(permisosValue);
+        if (horas > 838) {
+            alert('El valor de horas no puede exceder 838 horas (límite de MySQL TIME)');
+            input.focus();
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Guardar';
+            return;
+        }
+        permisosValue = String(horas).padStart(2, '0') + ':00';
+    }
+    
+    // Validar formato HH:MM
+    const regexPermisos = /^([0-9]{1,3}):([0-5][0-9])$/;
     
     if (!regexPermisos.test(permisosValue)) {
-        alert('Por favor ingrese un formato válido (HH:MM). Ejemplo: 33:30');
+        alert('Por favor ingrese un formato válido (HH:MM o solo número de horas). Ejemplo: 33:30 o 5');
         input.focus();
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = 'Guardar';
         return;
     }
     
@@ -987,6 +1006,8 @@ function guardarPermisosAcumulados() {
     if (horas > 838) {
         alert('El valor de horas no puede exceder 838 horas (límite de MySQL TIME)');
         input.focus();
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = 'Guardar';
         return;
     }
     
@@ -1010,9 +1031,12 @@ function guardarPermisosAcumulados() {
         if (data.success) {
             display.textContent = permisosValue;
             document.getElementById('permisos-acumulados-original').value = permisosValue;
+            input.value = permisosValue;
             display.style.display = 'inline';
             input.style.display = 'none';
             btnGuardar.style.display = 'none';
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Guardar';
             mensaje.textContent = '✓ Guardado';
             mensaje.style.color = '#28a745';
             setTimeout(() => {
@@ -1068,31 +1092,52 @@ function guardarPermisosInjustificadosAcumulados() {
     const btnGuardar = document.getElementById('btn-guardar-permisos-injustificados');
     const cedula = document.getElementById('cedula-funcionario').value;
     const mensaje = document.getElementById('mensaje-permisos-injustificados');
+
+    // Obtener valor y limpiar
+    let permisosValue = input.value.trim();
     
-    const permisosValue = input.value.trim();
-    const regexPermisos = /^([0-9]{1,2}):([0-5][0-9])$/;
-    
+    // Si es solo un número, convertirlo a formato HH:MM (ej: "5" -> "05:00")
+    const regexSoloNumero = /^([0-9]+)$/;
+    if (regexSoloNumero.test(permisosValue)) {
+        const horas = parseInt(permisosValue);
+        if (horas > 838) {
+            alert('El valor de horas no puede exceder 838 horas (límite de MySQL TIME)');
+            input.focus();
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Guardar';
+            return;
+        }
+        permisosValue = String(horas).padStart(2, '0') + ':00';
+    }
+
+    // Validar formato HH:MM
+    const regexPermisos = /^([0-9]{1,3}):([0-5][0-9])$/;
+
     if (!regexPermisos.test(permisosValue)) {
-        alert('Por favor ingrese un formato válido (HH:MM). Ejemplo: 33:30');
+        alert('Por favor ingrese un formato válido (HH:MM o solo número de horas). Ejemplo: 33:30 o 5');
         input.focus();
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = 'Guardar';
         return;
     }
-    
+
     const partes = permisosValue.split(':');
     const horas = parseInt(partes[0]);
     const minutos = parseInt(partes[1]);
-    
+
     if (horas > 838) {
         alert('El valor de horas no puede exceder 838 horas (límite de MySQL TIME)');
         input.focus();
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = 'Guardar';
         return;
     }
-    
+
     btnGuardar.disabled = true;
     btnGuardar.textContent = 'Guardando...';
-    
+
     const permisosFormatoTime = String(horas).padStart(2, '0') + ':' + String(minutos).padStart(2, '0') + ':00';
-    
+
     fetch('<?php echo BASE_URL; ?>/forms/permisos/actualizar_permisos_injustificados_acumulados.php', {
         method: 'POST',
         headers: {
@@ -1108,9 +1153,12 @@ function guardarPermisosInjustificadosAcumulados() {
         if (data.success) {
             display.textContent = permisosValue;
             document.getElementById('permisos-injustificados-acumulados-original').value = permisosValue;
+            input.value = permisosValue;
             display.style.display = 'inline';
             input.style.display = 'none';
             btnGuardar.style.display = 'none';
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Guardar';
             mensaje.textContent = '✓ Guardado';
             mensaje.style.color = '#28a745';
             setTimeout(() => {

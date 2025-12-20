@@ -1,9 +1,9 @@
 <?php
 /**
- * Actualizar Derechos de Funcionario
+ * Actualizar Misiones Oficiales Acumuladas
  * Sistema RRHH
  * 
- * Endpoint AJAX para actualizar los derechos de un funcionario (vacaciones y permisos)
+ * Endpoint AJAX para actualizar las misiones oficiales acumuladas de un funcionario
  */
 
 header('Content-Type: application/json');
@@ -13,7 +13,7 @@ require_once __DIR__ . '/../../classes/Database.php';
 require_once __DIR__ . '/../../roles_rrhh/classes/Auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
-// Solo administradores pueden actualizar derechos
+// Solo administradores pueden actualizar misiones acumuladas
 if (!Auth::isAdmin()) {
     http_response_code(403);
     echo json_encode(['success' => false, 'error' => 'No tienes permisos para realizar esta acción']);
@@ -39,7 +39,7 @@ if (!$data) {
 
 // Validar campos requeridos
 $cedula = isset($data['cedula']) ? trim($data['cedula']) : '';
-$ano = isset($data['ano']) ? intval($data['ano']) : null;
+$misionOficialAcumuladas = isset($data['mision_oficial_acumuladas']) ? trim($data['mision_oficial_acumuladas']) : '';
 
 if (empty($cedula)) {
     http_response_code(400);
@@ -47,15 +47,12 @@ if (empty($cedula)) {
     exit();
 }
 
-// Validar año (debe ser un año válido)
-if ($ano !== null && ($ano < 2000 || $ano > 2100)) {
+// Validar formato de tiempo (HH:MM:SS)
+if (!empty($misionOficialAcumuladas) && !preg_match('/^\d{2}:\d{2}:\d{2}$/', $misionOficialAcumuladas)) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'error' => 'Año inválido']);
+    echo json_encode(['success' => false, 'error' => 'Formato de tiempo inválido. Debe ser HH:MM:SS']);
     exit();
 }
-
-// Obtener valores de derechos (convertir a enteros)
-$vacacionesDias = isset($data['vacaciones_dias']) ? (int)$data['vacaciones_dias'] : null;
 
 try {
     $db = Database::getInstance()->getConnection();
@@ -69,59 +66,47 @@ try {
         exit();
     }
     
-    // Verificar si existen los nuevos campos TIME o los antiguos DECIMAL
-    $usarCamposTime = false;
-    try {
-        $stmtCheckTime = $db->query("SHOW COLUMNS FROM funcionarios LIKE 'permisos_justificados_acumulados'");
-        $usarCamposTime = $stmtCheckTime->rowCount() > 0;
-    } catch (PDOException $e) {
-        $usarCamposTime = false;
-    }
+    // Verificar si la columna existe
+    $stmtCheckCol = $db->query("
+        SELECT COUNT(*) as existe 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'funcionarios' 
+        AND COLUMN_NAME = 'mision_oficial_acumuladas'
+    ");
+    $columnaExiste = $stmtCheckCol->fetch()['existe'] > 0;
     
-    // Construir query de actualización dinámicamente
-    $campos = [];
-    $valores = [];
-    
-    if ($vacacionesDias !== null) {
-        $campos[] = "vacaciones_dias_acumulados = ?";
-        $valores[] = $vacacionesDias;
-    }
-    
-    
-    if ($ano !== null) {
-        $campos[] = "ano_derechos = ?";
-        $valores[] = $ano;
-    }
-    
-    if (empty($campos)) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'error' => 'No se proporcionaron campos para actualizar']);
+    if (!$columnaExiste) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'La columna mision_oficial_acumuladas no existe en la base de datos']);
         exit();
     }
     
-    // Agregar cédula al final para el WHERE
-    $valores[] = $cedula;
+    // Actualizar el valor (permitir NULL si se envía vacío)
+    $valorTime = !empty($misionOficialAcumuladas) ? $misionOficialAcumuladas : null;
     
-    // Ejecutar actualización
-    $sql = "UPDATE funcionarios SET " . implode(', ', $campos) . " WHERE cedula = ?";
-    $stmt = $db->prepare($sql);
-    $stmt->execute($valores);
+    $stmt = $db->prepare("
+        UPDATE funcionarios 
+        SET mision_oficial_acumuladas = ? 
+        WHERE cedula = ?
+    ");
+    $stmt->execute([$valorTime, $cedula]);
     
     echo json_encode([
         'success' => true,
-        'mensaje' => 'Derechos actualizados correctamente'
+        'mensaje' => 'Misiones oficiales acumuladas actualizadas correctamente'
     ]);
     
 } catch (PDOException $e) {
     http_response_code(500);
-    error_log("Error al actualizar derechos: " . $e->getMessage());
+    error_log("Error al actualizar misiones oficiales acumuladas: " . $e->getMessage());
     echo json_encode([
         'success' => false,
-        'error' => 'Error al actualizar los derechos: ' . $e->getMessage()
+        'error' => 'Error al actualizar las misiones oficiales acumuladas: ' . $e->getMessage()
     ]);
 } catch (Exception $e) {
     http_response_code(500);
-    error_log("Error inesperado al actualizar derechos: " . $e->getMessage());
+    error_log("Error inesperado al actualizar misiones oficiales acumuladas: " . $e->getMessage());
     echo json_encode([
         'success' => false,
         'error' => 'Error inesperado: ' . $e->getMessage()

@@ -293,15 +293,15 @@ include __DIR__ . '/../../includes/header.php';
     </div>
     
     <!-- Card 2: Misión Oficial (Rojo) -->
-    <div class="permiso-card" onclick="mostrarConstruccion()">
+    <div class="permiso-card">
         <div class="icon-container">
             <i class="fas fa-plane fa-icon"></i>
         </div>
         <h3>Misión Oficial</h3>
         <p>Solicitud de misión oficial</p>
-        <button class="btn" onclick="event.stopPropagation(); mostrarConstruccion();">
+        <a href="<?php echo BASE_URL; ?>/forms/permisos/mision_oficial.php" class="btn">
             <i class="fas fa-edit"></i> Llenar Formulario
-        </button>
+        </a>
     </div>
     
     <!-- Card 3: Reincorporación (Morado) -->

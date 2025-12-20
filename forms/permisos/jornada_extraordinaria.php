@@ -496,14 +496,14 @@ if ($mensaje): ?>
                   onmouseover="this.style.background='#e3f2fd';" 
                   onmouseout="this.style.background='transparent';"
                   onclick="editarHorasAcumuladas()"
-                  title="Click para editar (formato HH:MM)">
+                  title="Click para editar (formato HH:MM o solo número de horas)">
                 <?php echo htmlspecialchars($horasAcumuladasMostrar ?? '00:00'); ?>
             </span>
             <input type="text" 
                    id="horas-acumuladas-input" 
                    value="<?php echo htmlspecialchars($horasAcumuladasMostrar ?? '00:00'); ?>"
-                   pattern="[0-9]{1,2}:[0-5][0-9]"
-                   placeholder="HH:MM"
+                   pattern="[0-9]{1,3}:[0-5][0-9]|[0-9]+"
+                   placeholder="HH:MM o número"
                    style="display: none; font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; padding: 0.25rem 0.5rem; border: 1px solid #2196F3; border-radius: 3px; width: 100px; text-align: center;"
                    onblur="guardarHorasAcumuladas()"
                    onkeydown="if(event.key === 'Enter') { event.preventDefault(); guardarHorasAcumuladas(); } if(event.key === 'Escape') cancelarEdicion();">
@@ -678,13 +678,31 @@ function guardarHorasAcumuladas() {
     const cedula = document.getElementById('cedula-funcionario').value;
     const mensaje = document.getElementById('mensaje-horas');
     
+    // Obtener valor y limpiar
+    let horasValue = input.value.trim();
+    
+    // Si es solo un número, convertirlo a formato HH:MM (ej: "5" -> "05:00")
+    const regexSoloNumero = /^([0-9]+)$/;
+    if (regexSoloNumero.test(horasValue)) {
+        const horas = parseInt(horasValue);
+        if (horas > 838) {
+            alert('El valor de horas no puede exceder 838 horas (límite de MySQL TIME)');
+            input.focus();
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Guardar';
+            return;
+        }
+        horasValue = String(horas).padStart(2, '0') + ':00';
+    }
+    
     // Validar formato HH:MM
-    const horasValue = input.value.trim();
-    const regexHoras = /^([0-9]{1,2}):([0-5][0-9])$/;
+    const regexHoras = /^([0-9]{1,3}):([0-5][0-9])$/;
     
     if (!regexHoras.test(horasValue)) {
-        alert('Por favor ingrese un formato válido (HH:MM). Ejemplo: 33:30');
+        alert('Por favor ingrese un formato válido (HH:MM o solo número de horas). Ejemplo: 33:30 o 5');
         input.focus();
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = 'Guardar';
         return;
     }
     
@@ -696,6 +714,8 @@ function guardarHorasAcumuladas() {
     if (horas > 838) {
         alert('El valor de horas no puede exceder 838 horas (límite de MySQL TIME)');
         input.focus();
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = 'Guardar';
         return;
     }
     
@@ -726,10 +746,15 @@ function guardarHorasAcumuladas() {
             // Actualizar valor original
             document.getElementById('horas-acumuladas-original').value = horasValue;
             
+            // Actualizar input también
+            input.value = horasValue;
+            
             // Volver a modo lectura
             display.style.display = 'inline';
             input.style.display = 'none';
             btnGuardar.style.display = 'none';
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Guardar';
             
             // Mostrar mensaje de éxito
             mensaje.textContent = '✓ Guardado';

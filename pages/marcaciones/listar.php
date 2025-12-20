@@ -479,7 +479,10 @@ try {
                                                      vacaciones_dias_acumulados, 
                                                      permisos_justificados_acumulados,
                                                      permisos_no_justificados_acumulados,
-                                                     ano_derechos
+                                                     ano_derechos,
+                                                     horas_extraordinarias_acumuladas,
+                                                     permisos_acumulados,
+                                                     mision_oficial_acumuladas
                                               FROM funcionarios WHERE cedula = ?");
                 } else {
                     // Usar campos antiguos DECIMAL
@@ -489,11 +492,17 @@ try {
                                                      permisos_justificados_horas_acumuladas,
                                                      permisos_no_justificados_dias_acumulados,
                                                      permisos_no_justificados_horas_acumuladas,
-                                                     ano_derechos
+                                                     ano_derechos,
+                                                     horas_extraordinarias_acumuladas,
+                                                     permisos_acumulados,
+                                                     mision_oficial_acumuladas
                                               FROM funcionarios WHERE cedula = ?");
                 }
             } else {
-                $stmtFunc = $db->prepare("SELECT nombre, apellido, h_entrada, h_salida, fun_extra 
+                $stmtFunc = $db->prepare("SELECT nombre, apellido, h_entrada, h_salida, fun_extra,
+                                                 horas_extraordinarias_acumuladas,
+                                                 permisos_acumulados,
+                                                 mision_oficial_acumuladas
                                           FROM funcionarios WHERE cedula = ?");
             }
         } else {
@@ -1181,60 +1190,6 @@ include __DIR__ . '/../../includes/header.php';
                    style="width: 60px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px; text-align: center;">
         </div>
         
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <label for="permisos_justificados_dias" style="font-weight: bold; color: #555; white-space: nowrap;">
-                Permisos Justificados - Días:
-                <i class="fas fa-clock" style="color: #ff9800; margin-left: 0.25rem;" 
-                   title="Días de permisos justificados. Pueden tomarse por día completo o por horas. Afecta horas trabajadas."></i>
-            </label>
-            <input type="number" 
-                   id="permisos_justificados_dias" 
-                   name="permisos_justificados_dias" 
-                   value="<?php echo sprintf('%02d', (int)$derechosFuncionario['permisos_justificados_dias']); ?>" 
-                   step="1" 
-                   min="0"
-                   max="99"
-                   style="width: 60px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px; text-align: center;">
-            <label for="permisos_justificados_horas" style="font-weight: bold; color: #555; white-space: nowrap; margin-left: 0.5rem;">
-                Horas:
-            </label>
-            <input type="number" 
-                   id="permisos_justificados_horas" 
-                   name="permisos_justificados_horas" 
-                   value="<?php echo sprintf('%02d', (int)$derechosFuncionario['permisos_justificados_horas']); ?>" 
-                   step="1" 
-                   min="0"
-                   max="23"
-                   style="width: 60px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px; text-align: center;">
-        </div>
-        
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <label for="permisos_no_justificados_dias" style="font-weight: bold; color: #555; white-space: nowrap;">
-                Permisos InJustificados - Días:
-                <i class="fas fa-clock" style="color: #dc3545; margin-left: 0.25rem;" 
-                   title="Días de permisos no justificados. Pueden tomarse por día completo o por horas. Afecta horas trabajadas."></i>
-            </label>
-            <input type="number" 
-                   id="permisos_no_justificados_dias" 
-                   name="permisos_no_justificados_dias" 
-                   value="<?php echo sprintf('%02d', (int)$derechosFuncionario['permisos_no_justificados_dias']); ?>" 
-                   step="1" 
-                   min="0"
-                   max="99"
-                   style="width: 60px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px; text-align: center;">
-            <label for="permisos_no_justificados_horas" style="font-weight: bold; color: #555; white-space: nowrap; margin-left: 0.5rem;">
-                Horas:
-            </label>
-            <input type="number" 
-                   id="permisos_no_justificados_horas" 
-                   name="permisos_no_justificados_horas" 
-                   value="<?php echo sprintf('%02d', (int)$derechosFuncionario['permisos_no_justificados_horas']); ?>" 
-                   step="1" 
-                   min="0"
-                   max="23"
-                   style="width: 60px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 3px; text-align: center;">
-        </div>
-        
         <div style="margin-left: auto;">
             <button type="button" 
                     id="btn-guardar-derechos" 
@@ -1250,7 +1205,6 @@ include __DIR__ . '/../../includes/header.php';
         <strong style="color: #1976d2;">Nota:</strong>
         <ul style="margin: 0.5rem 0 0 1.5rem; color: #555;">
             <li><strong>Vacaciones:</strong> Se toman por día completo. No afectan las horas trabajadas del día.</li>
-            <li><strong>Permisos Justificados y No Justificados:</strong> Pueden tomarse por día completo o por horas. Estos campos <strong>afectan el cálculo de horas trabajadas</strong>.</li>
             <li>En Panamá, 1 día laboral = 7 horas.</li>
         </ul>
     </div>
@@ -1267,11 +1221,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Obtener valores del formulario (convertir a enteros)
             const datos = {
                 cedula: '<?php echo htmlspecialchars($cedulaFiltro, ENT_QUOTES); ?>',
-                vacaciones_dias: parseInt(document.getElementById('vacaciones_dias').value) || 0,
-                permisos_justificados_dias: parseInt(document.getElementById('permisos_justificados_dias').value) || 0,
-                permisos_justificados_horas: parseInt(document.getElementById('permisos_justificados_horas').value) || 0,
-                permisos_no_justificados_dias: parseInt(document.getElementById('permisos_no_justificados_dias').value) || 0,
-                permisos_no_justificados_horas: parseInt(document.getElementById('permisos_no_justificados_horas').value) || 0
+                vacaciones_dias: parseInt(document.getElementById('vacaciones_dias').value) || 0
             };
             
             // Deshabilitar botón mientras se procesa
@@ -1320,8 +1270,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         // Formatear inputs para mostrar siempre dos dígitos al perder el foco
-        const inputsDerechos = ['vacaciones_dias', 'permisos_justificados_dias', 'permisos_justificados_horas', 
-                                'permisos_no_justificados_dias', 'permisos_no_justificados_horas'];
+        const inputsDerechos = ['vacaciones_dias', 'permisos_no_justificados_horas'];
         inputsDerechos.forEach(function(inputId) {
             const input = document.getElementById(inputId);
             if (input) {
@@ -1775,6 +1724,240 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
         endif;
     } catch (Exception $e) {
         // Error al obtener jornadas, no mostrar sección
+    }
+endif;
+
+// Obtener acumulados totales del funcionario (valores guardados en funcionarios)
+$horasExtraordinariasAcumuladasTotal = null;
+$permisosAcumuladosTotal = null;
+$misionOficialAcumuladasTotal = null;
+
+// Los acumulados se obtienen de la consulta del funcionario más arriba
+if (!empty($cedulaFiltro) && !$exFuncionario && isset($funcionario)) {
+    $horasExtraordinariasAcumuladasTotal = $funcionario['horas_extraordinarias_acumuladas'] ?? null;
+    $permisosAcumuladosTotal = $funcionario['permisos_acumulados'] ?? null;
+    $misionOficialAcumuladasTotal = $funcionario['mision_oficial_acumuladas'] ?? null;
+}
+
+// Obtener misiones oficiales del período (solo si hay marcaciones y el período está definido)
+$misionesOficialesPeriodo = [];
+$totalMisionesOficiales = '00:00:00';
+
+if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)): 
+    try {
+        $sqlMisiones = "SELECT mo.id_mision, mo.cedula, mo.fecha, mo.hora_desde, mo.hora_hasta, 
+                               mo.horas_totales, mo.motivo, mo.fecha_registro,
+                               f.nombre, f.apellido,
+                               CASE WHEN m.id_marcacion IS NOT NULL THEN 1 ELSE 0 END as tiene_marcacion
+                        FROM mision_oficial mo
+                        LEFT JOIN funcionarios f ON mo.cedula = f.cedula
+                        LEFT JOIN marcaciones m ON mo.cedula = m.cedula AND mo.fecha = m.fecha
+                        WHERE mo.estado = 'activa'";
+        
+        $paramsMisiones = [];
+        $condicionesMisiones = [];
+        
+        if (!empty($cedulaFiltro)) {
+            $condicionesMisiones[] = "mo.cedula = ?";
+            $paramsMisiones[] = $cedulaFiltro;
+        }
+        
+        if (!empty($fechaDesde)) {
+            $condicionesMisiones[] = "mo.fecha >= ?";
+            $paramsMisiones[] = $fechaDesde;
+        }
+        
+        if (!empty($fechaHasta)) {
+            $condicionesMisiones[] = "mo.fecha <= ?";
+            $paramsMisiones[] = $fechaHasta;
+        }
+        
+        if (!empty($condicionesMisiones)) {
+            $sqlMisiones .= " AND " . implode(" AND ", $condicionesMisiones);
+        }
+        
+        $sqlMisiones .= " ORDER BY mo.fecha DESC, mo.fecha_registro DESC";
+        
+        $stmtMisiones = $db->prepare($sqlMisiones);
+        $stmtMisiones->execute($paramsMisiones);
+        $misionesOficialesPeriodo = $stmtMisiones->fetchAll();
+        
+        // Calcular total de misiones oficiales del período
+        $totalMisionesOficialesMinutos = 0;
+        foreach ($misionesOficialesPeriodo as $mision) {
+            if (!empty($mision['horas_totales'])) {
+                // Parsear horas (formato HH:MM:SS o HH:MM)
+                $horasTotalesMision = $mision['horas_totales'];
+                $partesMision = explode(':', $horasTotalesMision);
+                $horasMision = (int)($partesMision[0] ?? 0);
+                $minutosMision = (int)($partesMision[1] ?? 0);
+                $totalMisionesOficialesMinutos += ($horasMision * 60) + $minutosMision;
+            }
+        }
+        // Convertir minutos totales a formato HH:MM:00
+        $horasMisionesTotal = floor($totalMisionesOficialesMinutos / 60);
+        $minutosMisionesTotal = $totalMisionesOficialesMinutos % 60;
+        $totalMisionesOficiales = sprintf('%02d:%02d:00', $horasMisionesTotal, $minutosMisionesTotal);
+        
+        if (count($misionesOficialesPeriodo) > 0):
+?>
+<style>
+.misiones-oficiales-section {
+    margin-top: 2rem;
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.misiones-oficiales-section h3 {
+    color: #dc3545;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #dc3545;
+}
+
+.misiones-oficiales-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.misiones-oficiales-table th {
+    background: #dc3545;
+    color: white;
+    padding: 0.75rem;
+    text-align: left;
+    border: 1px solid #c82333;
+}
+
+.misiones-oficiales-table td {
+    padding: 0.75rem;
+    border: 1px solid #dee2e6;
+}
+
+.misiones-oficiales-table tr.mision-con-marcacion {
+    background-color: #ffe6e6;
+}
+
+.misiones-oficiales-table tr.mision-sin-marcacion {
+    background-color: #ffe6e6;
+    color: #c82333;
+}
+
+.misiones-oficiales-table tr.mision-con-marcacion td {
+    color: #c82333;
+    font-weight: 500;
+}
+
+.misiones-oficiales-table tr.mision-sin-marcacion td {
+    color: #c82333;
+    font-weight: 500;
+}
+</style>
+
+<div class="misiones-oficiales-section">
+    <h3><i class="fas fa-plane"></i> Misión Oficial del Período</h3>
+    <table class="misiones-oficiales-table">
+        <thead>
+            <tr>
+                <?php if (empty($cedulaFiltro)): ?>
+                <th>Cédula</th>
+                <th>Nombre</th>
+                <?php endif; ?>
+                <th>Fecha</th>
+                <th>Hora Desde</th>
+                <th>Hora Hasta</th>
+                <th>Horas Totales</th>
+                <th>Motivo</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($misionesOficialesPeriodo as $mision): 
+                $claseFila = $mision['tiene_marcacion'] ? 'mision-con-marcacion' : 'mision-sin-marcacion';
+            ?>
+                <tr class="<?php echo $claseFila; ?>">
+                    <?php if (empty($cedulaFiltro)): ?>
+                    <td><?php echo htmlspecialchars($mision['cedula']); ?></td>
+                    <td><?php echo htmlspecialchars(($mision['nombre'] ?? '') . ' ' . ($mision['apellido'] ?? '')); ?></td>
+                    <?php endif; ?>
+                    <td><?php echo date('d/m/Y', strtotime($mision['fecha'])); ?></td>
+                    <td>
+                        <?php 
+                        if ($mision['hora_desde']) {
+                            $hora = new DateTime($mision['hora_desde']);
+                            // Formato 12 horas con a.m./p.m.
+                            $horaFormato = $hora->format('g:i');
+                            $ampm = strtolower($hora->format('A')); // am o pm
+                            $ampm = str_replace(['am', 'pm'], ['a.m.', 'p.m.'], $ampm);
+                            echo $horaFormato . ' ' . $ampm;
+                        } else {
+                            echo '-';
+                        }
+                        ?>
+                    </td>
+                    <td>
+                        <?php 
+                        if ($mision['hora_hasta']) {
+                            $hora = new DateTime($mision['hora_hasta']);
+                            // Formato 12 horas con a.m./p.m.
+                            $horaFormato = $hora->format('g:i');
+                            $ampm = strtolower($hora->format('A')); // am o pm
+                            $ampm = str_replace(['am', 'pm'], ['a.m.', 'p.m.'], $ampm);
+                            echo $horaFormato . ' ' . $ampm;
+                        } else {
+                            echo '-';
+                        }
+                        ?>
+                    </td>
+                    <td><strong>
+                        <?php 
+                        if (!empty($mision['horas_totales'])) {
+                            // Formatear para mostrar solo HH:MM (sin segundos)
+                            $horasTotales = $mision['horas_totales'];
+                            if (strlen($horasTotales) >= 5) {
+                                echo substr($horasTotales, 0, 5); // Toma solo HH:MM
+                            } else {
+                                echo $horasTotales;
+                            }
+                        } else {
+                            echo '-';
+                        }
+                        ?>
+                    </strong></td>
+                    <td><?php echo htmlspecialchars(substr($mision['motivo'], 0, 50)); ?><?php echo strlen($mision['motivo']) > 50 ? '...' : ''; ?></td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+    
+    <!-- Sumatoria de Misiones Oficiales del Período - Debajo de la tabla -->
+    <div style="margin-top: 1rem; color: #666; display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;">
+        <div>
+            <strong>Total Misión Oficial del Período:</strong>
+            <span style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; color: #dc3545;">
+                <?php 
+                // Mostrar el valor formateado (ya viene en formato HH:MM:SS)
+                if (!empty($totalMisionesOficiales)) {
+                    // Extraer horas y minutos del string
+                    $partes = explode(':', $totalMisionesOficiales);
+                    $horasInt = (int)($partes[0] ?? 0);
+                    $minutosInt = (int)($partes[1] ?? 0);
+                    // Mostrar en formato HH:MM
+                    echo sprintf('%d:%02d', $horasInt, $minutosInt);
+                } else {
+                    echo '00:00';
+                }
+                ?>
+            </span>
+        </div>
+    </div>
+</div>
+
+<?php 
+        endif;
+    } catch (Exception $e) {
+        // Error al obtener misiones, no mostrar sección
     }
 endif;
 

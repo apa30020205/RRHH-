@@ -1,6 +1,6 @@
 <?php
 /**
- * Eliminar Jornada Extraordinaria (Solo Administradores)
+ * Eliminar Misión Oficial (Solo Administradores)
  * Sistema RRHH
  */
 
@@ -11,15 +11,15 @@ require_once __DIR__ . '/../../classes/Database.php';
 require_once __DIR__ . '/../../roles_rrhh/classes/Auth.php';
 
 // Obtener parámetros
-$idJornada = isset($_GET['id_jornada']) ? intval($_GET['id_jornada']) : 0;
+$idMision = isset($_GET['id_mision']) ? intval($_GET['id_mision']) : 0;
 $cedulaFiltro = isset($_GET['cedula']) ? trim($_GET['cedula']) : '';
 $fechaDesde = isset($_GET['fecha_desde']) ? trim($_GET['fecha_desde']) : '';
 $fechaHasta = isset($_GET['fecha_hasta']) ? trim($_GET['fecha_hasta']) : '';
 
-if ($idJornada <= 0) {
-    mostrarMensaje("ID de jornada no proporcionado o inválido", 'error');
-    // Construir URL de redirección con parámetros (redirigir a jornada_extraordinaria.php)
-    $redirectUrl = BASE_URL . '/forms/permisos/jornada_extraordinaria.php';
+if ($idMision <= 0) {
+    mostrarMensaje("ID de misión no proporcionado o inválido", 'error');
+    // Construir URL de redirección con parámetros (redirigir a mision_oficial.php)
+    $redirectUrl = BASE_URL . '/forms/permisos/mision_oficial.php';
     $params = [];
     if (!empty($cedulaFiltro)) {
         $params['buscar'] = $cedulaFiltro;
@@ -39,43 +39,43 @@ if ($idJornada <= 0) {
 try {
     $db = Database::getInstance()->getConnection();
     
-    // Verificar que la jornada existe y obtener sus datos para restar del acumulado
-    $stmt = $db->prepare("SELECT id_jornada, cedula, fecha, horas_totales FROM jornada_extraordinaria WHERE id_jornada = ?");
-    $stmt->execute([$idJornada]);
-    $jornada = $stmt->fetch();
+    // Verificar que la misión existe y obtener sus datos para restar del acumulado
+    $stmt = $db->prepare("SELECT id_mision, cedula, fecha, horas_totales FROM mision_oficial WHERE id_mision = ?");
+    $stmt->execute([$idMision]);
+    $mision = $stmt->fetch();
     
-    if (!$jornada) {
-        mostrarMensaje("Jornada extraordinaria no encontrada", 'error');
+    if (!$mision) {
+        mostrarMensaje("Misión oficial no encontrada", 'error');
     } else {
         // Calcular minutos a restar del acumulado
         $minutosARestar = 0;
-        if (!empty($jornada['horas_totales'])) {
-            $partes = explode(':', $jornada['horas_totales']);
+        if (!empty($mision['horas_totales'])) {
+            $partes = explode(':', $mision['horas_totales']);
             $horas = (int)($partes[0] ?? 0);
             $minutos = (int)($partes[1] ?? 0);
             $minutosARestar = ($horas * 60) + $minutos;
         }
         
-        // Eliminar jornada extraordinaria
-        $stmt = $db->prepare("DELETE FROM jornada_extraordinaria WHERE id_jornada = ?");
-        $stmt->execute([$idJornada]);
+        // Eliminar misión oficial
+        $stmt = $db->prepare("DELETE FROM mision_oficial WHERE id_mision = ?");
+        $stmt->execute([$idMision]);
         
         // Restar horas del acumulado si hay minutos a restar
         if ($minutosARestar > 0) {
             try {
-                // Obtener valor actual de horas_extraordinarias_acumuladas
+                // Obtener valor actual de mision_oficial_acumuladas
                 $stmtHorasActual = $db->prepare("
-                    SELECT horas_extraordinarias_acumuladas 
+                    SELECT mision_oficial_acumuladas 
                     FROM funcionarios 
                     WHERE cedula = ?
                 ");
-                $stmtHorasActual->execute([$jornada['cedula']]);
+                $stmtHorasActual->execute([$mision['cedula']]);
                 $resultado = $stmtHorasActual->fetch();
                 
                 $minutosActuales = 0;
-                if (!empty($resultado['horas_extraordinarias_acumuladas'])) {
+                if (!empty($resultado['mision_oficial_acumuladas'])) {
                     // Parsear tiempo acumulado actual
-                    $timeValue = $resultado['horas_extraordinarias_acumuladas'];
+                    $timeValue = $resultado['mision_oficial_acumuladas'];
                     if (is_string($timeValue) && strpos($timeValue, ':') !== false) {
                         $partes = explode(':', $timeValue);
                         $horasActuales = (int)($partes[0] ?? 0);
@@ -95,26 +95,26 @@ try {
                 // Actualizar en funcionarios
                 $stmtUpdate = $db->prepare("
                     UPDATE funcionarios 
-                    SET horas_extraordinarias_acumuladas = ? 
+                    SET mision_oficial_acumuladas = ? 
                     WHERE cedula = ?
                 ");
-                $stmtUpdate->execute([$nuevoTiempoAcumulado, $jornada['cedula']]);
+                $stmtUpdate->execute([$nuevoTiempoAcumulado, $mision['cedula']]);
                 
             } catch (Exception $e) {
                 // Log del error pero no fallar la eliminación
-                error_log("Error al actualizar horas_extraordinarias_acumuladas al eliminar: " . $e->getMessage());
+                error_log("Error al actualizar mision_oficial_acumuladas al eliminar: " . $e->getMessage());
             }
         }
         
-        mostrarMensaje("Jornada extraordinaria eliminada exitosamente", 'success');
+        mostrarMensaje("Misión oficial eliminada exitosamente", 'success');
     }
 
 } catch (Exception $e) {
-    mostrarMensaje("Error al eliminar jornada extraordinaria: " . $e->getMessage(), 'error');
+    mostrarMensaje("Error al eliminar misión oficial: " . $e->getMessage(), 'error');
 }
 
-// Construir URL de redirección con parámetros (redirigir a jornada_extraordinaria.php)
-$redirectUrl = BASE_URL . '/forms/permisos/jornada_extraordinaria.php';
+// Construir URL de redirección con parámetros (redirigir a mision_oficial.php)
+$redirectUrl = BASE_URL . '/forms/permisos/mision_oficial.php';
 $params = [];
 if (!empty($cedulaFiltro)) {
     $params['buscar'] = $cedulaFiltro;
