@@ -305,27 +305,27 @@ include __DIR__ . '/../../includes/header.php';
     </div>
     
     <!-- Card 3: Reincorporación (Morado) -->
-    <div class="permiso-card" onclick="mostrarConstruccion()">
+    <div class="permiso-card">
         <div class="icon-container">
             <i class="fas fa-redo fa-icon"></i>
         </div>
         <h3>Reincorporación</h3>
         <p>Notificación de reincorporación</p>
-        <button class="btn" onclick="event.stopPropagation(); mostrarConstruccion();">
+        <a href="<?php echo BASE_URL; ?>/forms/permisos/reincorporacion.php" class="btn">
             <i class="fas fa-edit"></i> Llenar Formulario
-        </button>
+        </a>
     </div>
     
     <!-- Card 4: Tiempo Compensatorio (Naranja) -->
-    <div class="permiso-card" onclick="mostrarConstruccion()">
+    <div class="permiso-card">
         <div class="icon-container">
             <i class="fas fa-hourglass-half fa-icon"></i>
         </div>
         <h3>Tiempo Compensatorio</h3>
         <p>Solicitud de uso de tiempo compensatorio</p>
-        <button class="btn" onclick="event.stopPropagation(); mostrarConstruccion();">
+        <a href="<?php echo BASE_URL; ?>/forms/permisos/tiempo_compensatorio.php" class="btn">
             <i class="fas fa-edit"></i> Llenar Formulario
-        </button>
+        </a>
     </div>
     
     <!-- Card 5: Solicitud de Permiso (Verde) -->
@@ -341,15 +341,15 @@ include __DIR__ . '/../../includes/header.php';
     </div>
     
     <!-- Card 6: Solicitud de Vacaciones (Rosa) -->
-    <div class="permiso-card" onclick="mostrarConstruccion()">
+    <div class="permiso-card">
         <div class="icon-container">
             <i class="fas fa-umbrella-beach fa-icon"></i>
         </div>
         <h3>Solicitud de Vacaciones</h3>
         <p>Solicitud de vacaciones</p>
-        <button class="btn" onclick="event.stopPropagation(); mostrarConstruccion();">
+        <a href="<?php echo BASE_URL; ?>/forms/permisos/vacaciones.php" class="btn">
             <i class="fas fa-edit"></i> Llenar Formulario
-        </button>
+        </a>
     </div>
 </div>
 

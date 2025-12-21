@@ -299,7 +299,7 @@ if ($mensaje): ?>
     }
     
     .btn {
-        background: #6c757d;
+        background: #dc3545;
         color: white;
         border: none;
         padding: 0.75rem 1.5rem;
@@ -311,7 +311,7 @@ if ($mensaje): ?>
     }
     
     .btn:hover {
-        background: #5a6268;
+        background: #c82333;
     }
 </style>
 

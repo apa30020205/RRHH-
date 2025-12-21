@@ -449,21 +449,26 @@ try {
     // Primero verificar campos nuevos (TIME), luego campos antiguos (DECIMAL)
     $camposDerechosExisten = false;
     $usarCamposTime = false; // Indica si usar campos TIME o DECIMAL
+    $columnasExistentes = []; // Array para almacenar qué columnas existen
     if (!empty($cedulaFiltro) && !$exFuncionario) {
         try {
+            // Obtener todas las columnas de la tabla funcionarios
+            $stmtCheckColumns = $db->query("SHOW COLUMNS FROM funcionarios");
+            $allColumns = $stmtCheckColumns->fetchAll(PDO::FETCH_COLUMN);
+            $columnasExistentes = array_flip($allColumns);
+            
             // Verificar si existen los nuevos campos TIME
-            $stmtCheckTime = $db->query("SHOW COLUMNS FROM funcionarios LIKE 'permisos_justificados_acumulados'");
-            if ($stmtCheckTime->rowCount() > 0) {
+            if (isset($columnasExistentes['permisos_justificados_acumulados'])) {
                 $usarCamposTime = true;
                 $camposDerechosExisten = true;
             } else {
                 // Verificar campos antiguos DECIMAL
-                $stmtCheck = $db->query("SHOW COLUMNS FROM funcionarios LIKE 'vacaciones_dias_acumulados'");
-                $camposDerechosExisten = $stmtCheck->rowCount() > 0;
+                $camposDerechosExisten = isset($columnasExistentes['vacaciones_dias_acumulados']);
             }
         } catch (PDOException $e) {
             $camposDerechosExisten = false;
             $usarCamposTime = false;
+            $columnasExistentes = [];
         }
     }
     
@@ -471,40 +476,48 @@ try {
         // Para funcionarios activos, obtener de tabla funcionarios (incluye h_entrada y h_salida)
         // Para ex-funcionarios, solo obtener nombre y apellido
         if (!$exFuncionario) {
-            // Construir query dinámicamente según si los campos de derechos existen
+            // Construir SELECT dinámicamente basado en columnas existentes
+            $camposBase = ['nombre', 'apellido', 'h_entrada', 'h_salida', 'fun_extra'];
+            $camposSelect = $camposBase;
+            
+            // Campos opcionales que solo se incluyen si existen
+            $camposOpcionales = [
+                'vacaciones_dias_acumulados',
+                'ano_derechos',
+                'horas_extraordinarias_acumuladas',
+                'permisos_acumulados',
+                'mision_oficial_acumuladas',
+                'tiempo_compensatorio_horas_acumuladas',
+                'tiempo_compensatorio_dias_acumulados'
+            ];
+            
             if ($camposDerechosExisten) {
                 if ($usarCamposTime) {
-                    // Usar nuevos campos TIME
-                    $stmtFunc = $db->prepare("SELECT nombre, apellido, h_entrada, h_salida, fun_extra, 
-                                                     vacaciones_dias_acumulados, 
-                                                     permisos_justificados_acumulados,
-                                                     permisos_no_justificados_acumulados,
-                                                     ano_derechos,
-                                                     horas_extraordinarias_acumuladas,
-                                                     permisos_acumulados,
-                                                     mision_oficial_acumuladas
-                                              FROM funcionarios WHERE cedula = ?");
+                    // Campos TIME nuevos
+                    $camposOpcionales = array_merge($camposOpcionales, [
+                        'permisos_justificados_acumulados',
+                        'permisos_no_justificados_acumulados'
+                    ]);
                 } else {
-                    // Usar campos antiguos DECIMAL
-                    $stmtFunc = $db->prepare("SELECT nombre, apellido, h_entrada, h_salida, fun_extra, 
-                                                     vacaciones_dias_acumulados, 
-                                                     permisos_justificados_dias_acumulados, 
-                                                     permisos_justificados_horas_acumuladas,
-                                                     permisos_no_justificados_dias_acumulados,
-                                                     permisos_no_justificados_horas_acumuladas,
-                                                     ano_derechos,
-                                                     horas_extraordinarias_acumuladas,
-                                                     permisos_acumulados,
-                                                     mision_oficial_acumuladas
-                                              FROM funcionarios WHERE cedula = ?");
+                    // Campos DECIMAL antiguos
+                    $camposOpcionales = array_merge($camposOpcionales, [
+                        'permisos_justificados_dias_acumulados',
+                        'permisos_justificados_horas_acumuladas',
+                        'permisos_no_justificados_dias_acumulados',
+                        'permisos_no_justificados_horas_acumuladas'
+                    ]);
                 }
-            } else {
-                $stmtFunc = $db->prepare("SELECT nombre, apellido, h_entrada, h_salida, fun_extra,
-                                                 horas_extraordinarias_acumuladas,
-                                                 permisos_acumulados,
-                                                 mision_oficial_acumuladas
-                                          FROM funcionarios WHERE cedula = ?");
             }
+            
+            // Agregar solo los campos opcionales que existen
+            foreach ($camposOpcionales as $campo) {
+                if (isset($columnasExistentes[$campo])) {
+                    $camposSelect[] = $campo;
+                }
+            }
+            
+            $sqlFunc = "SELECT " . implode(", ", $camposSelect) . " FROM funcionarios WHERE cedula = ?";
+            $stmtFunc = $db->prepare($sqlFunc);
         } else {
             $stmtFunc = $db->prepare("SELECT nombre, apellido FROM ex_funcionarios WHERE cedula = ?");
         }
@@ -1731,12 +1744,16 @@ endif;
 $horasExtraordinariasAcumuladasTotal = null;
 $permisosAcumuladosTotal = null;
 $misionOficialAcumuladasTotal = null;
+$tiempoCompHorasAcumuladasTotal = null;
+$tiempoCompDiasAcumuladosTotal = null;
 
 // Los acumulados se obtienen de la consulta del funcionario más arriba
 if (!empty($cedulaFiltro) && !$exFuncionario && isset($funcionario)) {
     $horasExtraordinariasAcumuladasTotal = $funcionario['horas_extraordinarias_acumuladas'] ?? null;
     $permisosAcumuladosTotal = $funcionario['permisos_acumulados'] ?? null;
     $misionOficialAcumuladasTotal = $funcionario['mision_oficial_acumuladas'] ?? null;
+    $tiempoCompHorasAcumuladasTotal = $funcionario['tiempo_compensatorio_horas_acumuladas'] ?? null;
+    $tiempoCompDiasAcumuladosTotal = $funcionario['tiempo_compensatorio_dias_acumulados'] ?? null;
 }
 
 // Obtener misiones oficiales del período (solo si hay marcaciones y el período está definido)
@@ -1958,6 +1975,288 @@ if (!empty($cedulaFiltro) || !empty($fechaDesde) || !empty($fechaHasta)):
         endif;
     } catch (Exception $e) {
         // Error al obtener misiones, no mostrar sección
+    }
+endif;
+
+// Obtener reincorporaciones del período (después de Misión Oficial)
+if (!empty($cedulaFiltro) && !$exFuncionario):
+    try {
+        $db = Database::getInstance()->getConnection();
+        
+        // Construir query para reincorporaciones
+        $sqlReincorporaciones = "
+            SELECT r.id_reincorporacion, r.cedula, r.motivo_ausencia, r.puesto, 
+                   r.no_posicion, r.unidad_administrativa, r.fecha_reincorporacion,
+                   f.nombre, f.apellido
+            FROM reincorporacion r
+            LEFT JOIN funcionarios f ON r.cedula = f.cedula
+            WHERE r.estado = 'activa'";
+        
+        $condicionesReincorporaciones = [];
+        $paramsReincorporaciones = [];
+        
+        if (!empty($cedulaFiltro)) {
+            $condicionesReincorporaciones[] = "r.cedula = ?";
+            $paramsReincorporaciones[] = $cedulaFiltro;
+        }
+        
+        if (!empty($fechaDesde)) {
+            $condicionesReincorporaciones[] = "r.fecha_reincorporacion >= ?";
+            $paramsReincorporaciones[] = $fechaDesde;
+        }
+        
+        if (!empty($fechaHasta)) {
+            $condicionesReincorporaciones[] = "r.fecha_reincorporacion <= ?";
+            $paramsReincorporaciones[] = $fechaHasta;
+        }
+        
+        if (!empty($condicionesReincorporaciones)) {
+            $sqlReincorporaciones .= " AND " . implode(" AND ", $condicionesReincorporaciones);
+        }
+        
+        $sqlReincorporaciones .= " ORDER BY r.fecha_reincorporacion DESC";
+        
+        $stmtReincorporaciones = $db->prepare($sqlReincorporaciones);
+        $stmtReincorporaciones->execute($paramsReincorporaciones);
+        $reincorporacionesPeriodo = $stmtReincorporaciones->fetchAll();
+        
+        if (count($reincorporacionesPeriodo) > 0):
+?>
+<style>
+.reincorporaciones-section {
+    margin-top: 2rem;
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.reincorporaciones-section h3 {
+    color: #9c27b0;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #9c27b0;
+}
+
+.reincorporaciones-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.reincorporaciones-table th {
+    background: #9c27b0;
+    color: white;
+    padding: 0.75rem;
+    text-align: left;
+    border: 1px solid #7b1fa2;
+}
+
+.reincorporaciones-table td {
+    padding: 0.75rem;
+    border: 1px solid #dee2e6;
+}
+
+.reincorporaciones-table tr:nth-child(even) {
+    background: #f8f9fa;
+}
+</style>
+
+<div class="reincorporaciones-section">
+    <h3><i class="fas fa-redo"></i> Reincorporación del Período</h3>
+    <table class="reincorporaciones-table">
+        <thead>
+            <tr>
+                <?php if (empty($cedulaFiltro)): ?>
+                <th>Cédula</th>
+                <th>Nombre</th>
+                <?php endif; ?>
+                <th>Fecha Reincorporación</th>
+                <th>Motivo Ausencia</th>
+                <th>Puesto</th>
+                <th>Posición N°</th>
+                <th>Unidad Administrativa</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($reincorporacionesPeriodo as $reincorporacion): ?>
+                <tr>
+                    <?php if (empty($cedulaFiltro)): ?>
+                    <td><?php echo htmlspecialchars($reincorporacion['cedula']); ?></td>
+                    <td><?php echo htmlspecialchars(($reincorporacion['nombre'] ?? '') . ' ' . ($reincorporacion['apellido'] ?? '')); ?></td>
+                    <?php endif; ?>
+                    <td><?php echo date('d/m/Y', strtotime($reincorporacion['fecha_reincorporacion'])); ?></td>
+                    <td><?php echo htmlspecialchars($reincorporacion['motivo_ausencia']); ?></td>
+                    <td><?php echo htmlspecialchars($reincorporacion['puesto']); ?></td>
+                    <td><?php echo htmlspecialchars($reincorporacion['no_posicion'] ?? '-'); ?></td>
+                    <td><?php echo htmlspecialchars($reincorporacion['unidad_administrativa'] ?? '-'); ?></td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+</div>
+
+<?php 
+        endif;
+    } catch (Exception $e) {
+        // Error al obtener reincorporaciones, no mostrar sección
+    }
+endif;
+
+// Obtener tiempo compensatorio del período (después de Reincorporación)
+if (!empty($cedulaFiltro) && !$exFuncionario):
+    try {
+        $db = Database::getInstance()->getConnection();
+        
+        // Construir query para tiempo compensatorio
+        $sqlTiempoComp = "
+            SELECT tc.id_tiempo_comp, tc.cedula, tc.horas, tc.dias, tc.fecha_uso,
+                   f.nombre, f.apellido
+            FROM tiempo_compensatorio tc
+            LEFT JOIN funcionarios f ON tc.cedula = f.cedula
+            WHERE tc.estado = 'activa'";
+        
+        $condicionesTiempoComp = [];
+        $paramsTiempoComp = [];
+        
+        if (!empty($cedulaFiltro)) {
+            $condicionesTiempoComp[] = "tc.cedula = ?";
+            $paramsTiempoComp[] = $cedulaFiltro;
+        }
+        
+        if (!empty($fechaDesde)) {
+            $condicionesTiempoComp[] = "tc.fecha_uso >= ?";
+            $paramsTiempoComp[] = $fechaDesde;
+        }
+        
+        if (!empty($fechaHasta)) {
+            $condicionesTiempoComp[] = "tc.fecha_uso <= ?";
+            $paramsTiempoComp[] = $fechaHasta;
+        }
+        
+        if (!empty($condicionesTiempoComp)) {
+            $sqlTiempoComp .= " AND " . implode(" AND ", $condicionesTiempoComp);
+        }
+        
+        $sqlTiempoComp .= " ORDER BY tc.fecha_uso DESC";
+        
+        $stmtTiempoComp = $db->prepare($sqlTiempoComp);
+        $stmtTiempoComp->execute($paramsTiempoComp);
+        $tiempoCompensatorioPeriodo = $stmtTiempoComp->fetchAll();
+        
+        // Calcular totales del período
+        $totalHorasPeriodo = 0;
+        $totalDiasPeriodo = 0;
+        foreach ($tiempoCompensatorioPeriodo as $tc) {
+            $totalHorasPeriodo += (int)($tc['horas'] ?? 0);
+            $totalDiasPeriodo += (int)($tc['dias'] ?? 0);
+        }
+        
+        if (count($tiempoCompensatorioPeriodo) > 0):
+?>
+<style>
+.tiempo-compensatorio-section {
+    margin-top: 2rem;
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.tiempo-compensatorio-section h3 {
+    color: #ff9800;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #ff9800;
+}
+
+.tiempo-compensatorio-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.tiempo-compensatorio-table th {
+    background: #ff9800;
+    color: white;
+    padding: 0.75rem;
+    text-align: left;
+    border: 1px solid #f57c00;
+}
+
+.tiempo-compensatorio-table td {
+    padding: 0.75rem;
+    border: 1px solid #dee2e6;
+}
+
+.tiempo-compensatorio-table tr:nth-child(even) {
+    background: #f8f9fa;
+}
+</style>
+
+<div class="tiempo-compensatorio-section">
+    <h3><i class="fas fa-hourglass-half"></i> Tiempo Compensatorio del Período</h3>
+    <table class="tiempo-compensatorio-table">
+        <thead>
+            <tr>
+                <?php if (empty($cedulaFiltro)): ?>
+                <th>Cédula</th>
+                <th>Nombre</th>
+                <?php endif; ?>
+                <th>Fecha Uso</th>
+                <th>Horas</th>
+                <th>Días</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($tiempoCompensatorioPeriodo as $tc): ?>
+                <tr>
+                    <?php if (empty($cedulaFiltro)): ?>
+                    <td><?php echo htmlspecialchars($tc['cedula']); ?></td>
+                    <td><?php echo htmlspecialchars(($tc['nombre'] ?? '') . ' ' . ($tc['apellido'] ?? '')); ?></td>
+                    <?php endif; ?>
+                    <td><?php echo date('d/m/Y', strtotime($tc['fecha_uso'])); ?></td>
+                    <td><strong><?php echo $tc['horas']; ?></strong></td>
+                    <td><strong><?php echo $tc['dias']; ?></strong></td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+    
+    <!-- Sumatoria de Tiempo Compensatorio del Período - Debajo de la tabla -->
+    <div style="margin-top: 1rem; color: #666; display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;">
+        <div>
+            <strong>Total Tiempo Compensatorio del Período:</strong>
+            <span style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; color: #ff9800;">
+                <?php echo sprintf('%d horas, %d días', $totalHorasPeriodo, $totalDiasPeriodo); ?>
+            </span>
+        </div>
+        
+        <?php if (!empty($tiempoCompHorasAcumuladasTotal) || !empty($tiempoCompDiasAcumuladosTotal)): ?>
+        <div>
+            <strong>Tiempo Compensatorio Acumulado:</strong>
+            <span style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; color: #ff9800;">
+                <?php 
+                $horasAcum = '00:00';
+                if (!empty($tiempoCompHorasAcumuladasTotal)) {
+                    $timeValue = $tiempoCompHorasAcumuladasTotal;
+                    if (is_string($timeValue) && strpos($timeValue, ':') !== false) {
+                        $horasAcum = substr($timeValue, 0, 5);
+                    }
+                }
+                $diasAcum = (int)($tiempoCompDiasAcumuladosTotal ?? 0);
+                echo sprintf('%s horas, %d días', $horasAcum, $diasAcum);
+                ?>
+            </span>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<?php 
+        endif;
+    } catch (Exception $e) {
+        // Error al obtener tiempo compensatorio, no mostrar sección
     }
 endif;
 
@@ -2237,6 +2536,147 @@ if (!empty($marcaciones) && (!empty($fechaDesde) || !empty($fechaHasta) || !empt
         endif;
     } catch (Exception $e) {
         // Error al obtener permisos, no mostrar sección
+    }
+endif;
+
+// Obtener solicitudes de vacaciones del período (después de Permisos)
+if (!empty($cedulaFiltro) && !$exFuncionario):
+    try {
+        $db = Database::getInstance()->getConnection();
+        
+        // Construir query para solicitudes de vacaciones
+        $sqlVacaciones = "
+            SELECT sv.id_vacacion, sv.cedula, sv.dias_solicitados, sv.fecha_inicio, sv.fecha_retorno,
+                   sv.resolucion, sv.fecha_resolucion, sv.dias_vacacion, sv.observaciones,
+                   f.nombre, f.apellido
+            FROM solicitud_vacaciones sv
+            LEFT JOIN funcionarios f ON sv.cedula = f.cedula
+            WHERE sv.estado = 'activa'";
+        
+        $condicionesVacaciones = [];
+        $paramsVacaciones = [];
+        
+        if (!empty($cedulaFiltro)) {
+            $condicionesVacaciones[] = "sv.cedula = ?";
+            $paramsVacaciones[] = $cedulaFiltro;
+        }
+        
+        if (!empty($fechaDesde)) {
+            $condicionesVacaciones[] = "sv.fecha_inicio >= ?";
+            $paramsVacaciones[] = $fechaDesde;
+        }
+        
+        if (!empty($fechaHasta)) {
+            $condicionesVacaciones[] = "sv.fecha_inicio <= ?";
+            $paramsVacaciones[] = $fechaHasta;
+        }
+        
+        if (!empty($condicionesVacaciones)) {
+            $sqlVacaciones .= " AND " . implode(" AND ", $condicionesVacaciones);
+        }
+        
+        $sqlVacaciones .= " ORDER BY sv.fecha_inicio DESC";
+        
+        $stmtVacaciones = $db->prepare($sqlVacaciones);
+        $stmtVacaciones->execute($paramsVacaciones);
+        $vacacionesPeriodo = $stmtVacaciones->fetchAll();
+        
+        // Calcular total de días del período
+        $totalDiasVacacionesPeriodo = 0;
+        foreach ($vacacionesPeriodo as $vacacion) {
+            $totalDiasVacacionesPeriodo += (int)($vacacion['dias_vacacion'] ?? 0);
+        }
+        
+        if (count($vacacionesPeriodo) > 0):
+?>
+<style>
+.vacaciones-section {
+    margin-top: 2rem;
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.vacaciones-section h3 {
+    color: #e91e63;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e91e63;
+}
+
+.vacaciones-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.vacaciones-table th {
+    background: #e91e63;
+    color: white;
+    padding: 0.75rem;
+    text-align: left;
+    border: 1px solid #c2185b;
+}
+
+.vacaciones-table td {
+    padding: 0.75rem;
+    border: 1px solid #dee2e6;
+}
+
+.vacaciones-table tr:nth-child(even) {
+    background: #f8f9fa;
+}
+</style>
+
+<div class="vacaciones-section">
+    <h3><i class="fas fa-umbrella-beach"></i> Solicitud de Vacaciones del Período</h3>
+    <table class="vacaciones-table">
+        <thead>
+            <tr>
+                <?php if (empty($cedulaFiltro)): ?>
+                <th>Cédula</th>
+                <th>Nombre</th>
+                <?php endif; ?>
+                <th>Fecha Inicio</th>
+                <th>Fecha Retorno</th>
+                <th>Resolución</th>
+                <th>Fecha Resolución</th>
+                <th>Días</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($vacacionesPeriodo as $vacacion): ?>
+                <tr>
+                    <?php if (empty($cedulaFiltro)): ?>
+                    <td><?php echo htmlspecialchars($vacacion['cedula']); ?></td>
+                    <td><?php echo htmlspecialchars(($vacacion['nombre'] ?? '') . ' ' . ($vacacion['apellido'] ?? '')); ?></td>
+                    <?php endif; ?>
+                    <td><?php echo $vacacion['fecha_inicio'] ? date('d/m/Y', strtotime($vacacion['fecha_inicio'])) : '-'; ?></td>
+                    <td><?php echo $vacacion['fecha_retorno'] ? date('d/m/Y', strtotime($vacacion['fecha_retorno'])) : '-'; ?></td>
+                    <td><?php echo htmlspecialchars($vacacion['resolucion'] ?? '-'); ?></td>
+                    <td><?php echo $vacacion['fecha_resolucion'] ? date('d/m/Y', strtotime($vacacion['fecha_resolucion'])) : '-'; ?></td>
+                    <td><strong><?php echo $vacacion['dias_vacacion']; ?></strong> días</td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+    
+    <!-- Sumatoria de Solicitud de Vacaciones del Período - Debajo de la tabla -->
+    <div style="margin-top: 1rem; color: #666; display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;">
+        <div>
+            <strong>Total Solicitud de Vacaciones del Período:</strong>
+            <span style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; color: #e91e63;">
+                <?php echo sprintf('%d días', $totalDiasVacacionesPeriodo); ?>
+            </span>
+        </div>
+    </div>
+</div>
+
+<?php 
+        endif;
+    } catch (Exception $e) {
+        // Error al obtener vacaciones, no mostrar sección
     }
 endif;
 ?>
