@@ -51,6 +51,9 @@ if (!empty($busqueda)) {
 $fechaDesdeFiltro = isset($_GET['fecha_desde']) ? $_GET['fecha_desde'] : '';
 $fechaHastaFiltro = isset($_GET['fecha_hasta']) ? $_GET['fecha_hasta'] : '';
 
+// Variables para acumulado
+$vacacionesDiasAcumuladosMostrar = 0;
+
 if ($funcionario) {
     try {
         $db = Database::getInstance()->getConnection();
@@ -81,6 +84,17 @@ if ($funcionario) {
         $stmtVacaciones = $db->prepare($sql);
         $stmtVacaciones->execute($params);
         $vacaciones = $stmtVacaciones->fetchAll();
+        
+        // Obtener días acumulados del funcionario
+        $stmtAcum = $db->prepare("
+            SELECT vacaciones_dias_acumulados
+            FROM funcionarios 
+            WHERE cedula = ?
+        ");
+        $stmtAcum->execute([$cedulaBD]);
+        $resultadoAcum = $stmtAcum->fetch();
+        
+        $vacacionesDiasAcumuladosMostrar = (int)($resultadoAcum['vacaciones_dias_acumulados'] ?? 0);
     } catch (Exception $e) {
         mostrarMensaje("Error al procesar vacaciones: " . $e->getMessage(), 'error');
     }
@@ -315,6 +329,26 @@ if ($mensaje): ?>
     .btn-eliminar-fila:hover {
         color: #c82333;
     }
+    
+    .acumulado-section {
+        margin-top: 1.5rem;
+        padding: 1rem;
+        background: #fce4ec;
+        border-radius: 6px;
+        border-left: 4px solid #e91e63;
+    }
+    
+    .acumulado-section h4 {
+        color: #c2185b;
+        margin-bottom: 1rem;
+        font-weight: bold;
+    }
+    
+    .acumulado-row {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
 </style>
 
 <!-- Sección de Búsqueda de Funcionario -->
@@ -357,11 +391,11 @@ if ($mensaje): ?>
             <div class="declaracion-section">
                 <h4 style="color: #e91e63; margin-bottom: 1rem; font-weight: bold;">Declaración</h4>
                 <p>
-                    Por este medio informo a usted que haré uso de 
+                    El funcionario informa que hará uso de 
                     <input type="number" id="dias_solicitados" name="dias_solicitados" 
                            min="1" max="365" value="0" required 
                            style="width: 80px; display: inline-block; margin: 0 0.25rem; text-align: center; font-weight: bold; border-color: #e91e63;">
-                    días de vacaciones a las que tengo derecho, según el Artículo 95 del Texto Único de 2008, que contiene la Ley N°9 del 20 de junio de 1994.
+                    días de vacaciones a las que tiene derecho, según el Artículo 95 del Texto Único de 2008, que contiene la Ley N°9 del 20 de junio de 1994.
                 </p>
                 
                 <div class="fechas-row">
@@ -419,6 +453,40 @@ if ($mensaje): ?>
             <button type="reset" class="btn" onclick="limpiarFormulario()">Limpiar</button>
         </div>
     </form>
+    
+    <?php if ($funcionario): ?>
+    <!-- Sección de Acumulado -->
+    <div class="acumulado-section">
+        <h4>Vacaciones Días Acumulados</h4>
+        <div class="acumulado-row">
+            <div>
+                <label><strong>Días Acumulados:</strong></label>
+                <span id="dias-acumulados-display" 
+                      style="font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; color: #e91e63; cursor: pointer; padding: 0.25rem 0.5rem; border-bottom: 1px dashed #e91e63;" 
+                      onmouseover="this.style.background='#f8bbd0';" 
+                      onmouseout="this.style.background='transparent';"
+                      onclick="editarDiasAcumulados()"
+                      title="Click para editar">
+                    <?php echo $vacacionesDiasAcumuladosMostrar; ?>
+                </span>
+                <input type="number" 
+                       id="dias-acumulados-input" 
+                       value="<?php echo $vacacionesDiasAcumuladosMostrar; ?>"
+                       style="display: none; font-size: 1.1em; font-weight: bold; margin-left: 0.5rem; padding: 0.25rem 0.5rem; border: 1px solid #e91e63; border-radius: 3px; width: 100px; text-align: center;"
+                       onblur="guardarDiasAcumulados()"
+                       onkeydown="if(event.key === 'Enter') { event.preventDefault(); guardarDiasAcumulados(); } if(event.key === 'Escape') { cancelarEdicionDias(); }">
+                <button id="btn-guardar-dias" 
+                        onclick="guardarDiasAcumulados()" 
+                        style="display: none; margin-left: 0.5rem; padding: 0.25rem 0.75rem; background: #e91e63; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">
+                    Guardar
+                </button>
+                <span id="mensaje-dias" style="color: #28a745; font-weight: bold; margin-left: 0.5rem;"></span>
+            </div>
+        </div>
+        <input type="hidden" id="cedula-funcionario" value="<?php echo htmlspecialchars($funcionario['cedula'] ?? '', ENT_QUOTES); ?>">
+        <input type="hidden" id="dias-acumulados-original" value="<?php echo $vacacionesDiasAcumuladosMostrar; ?>">
+    </div>
+    <?php endif; ?>
 </div>
 
 <!-- Listado de Vacaciones Registradas -->
@@ -559,6 +627,91 @@ document.getElementById('formVacaciones').addEventListener('submit', function(e)
         return false;
     }
 });
+
+// Funciones para editar días acumulados
+function editarDiasAcumulados() {
+    const display = document.getElementById('dias-acumulados-display');
+    const input = document.getElementById('dias-acumulados-input');
+    const btnGuardar = document.getElementById('btn-guardar-dias');
+    const mensaje = document.getElementById('mensaje-dias');
+    
+    display.style.display = 'none';
+    input.style.display = 'inline-block';
+    btnGuardar.style.display = 'inline-block';
+    input.focus();
+    input.select();
+}
+
+function cancelarEdicionDias() {
+    const display = document.getElementById('dias-acumulados-display');
+    const input = document.getElementById('dias-acumulados-input');
+    const btnGuardar = document.getElementById('btn-guardar-dias');
+    const mensaje = document.getElementById('mensaje-dias');
+    const original = document.getElementById('dias-acumulados-original').value;
+    
+    input.value = original;
+    display.style.display = 'inline';
+    input.style.display = 'none';
+    btnGuardar.style.display = 'none';
+    mensaje.textContent = '';
+}
+
+function guardarDiasAcumulados() {
+    const input = document.getElementById('dias-acumulados-input');
+    const display = document.getElementById('dias-acumulados-display');
+    const btnGuardar = document.getElementById('btn-guardar-dias');
+    const cedula = document.getElementById('cedula-funcionario').value;
+    const mensaje = document.getElementById('mensaje-dias');
+    
+    let diasValue = parseInt(input.value);
+    
+    // Validar que sea un número válido
+    if (isNaN(diasValue)) {
+        alert('Por favor ingrese un número válido');
+        input.focus();
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = 'Guardar';
+        return;
+    }
+    
+    btnGuardar.disabled = true;
+    btnGuardar.textContent = 'Guardando...';
+    
+    fetch('<?php echo BASE_URL; ?>/forms/permisos/actualizar_vacaciones_dias_acumulados.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            cedula: cedula,
+            dias_acumulados: diasValue
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            display.textContent = diasValue;
+            document.getElementById('dias-acumulados-original').value = diasValue;
+            input.value = diasValue;
+            display.style.display = 'inline';
+            input.style.display = 'none';
+            btnGuardar.style.display = 'none';
+            mensaje.textContent = '✓ Guardado';
+            setTimeout(() => { mensaje.textContent = ''; }, 2000);
+        } else {
+            alert('Error: ' + (data.error || 'No se pudo actualizar'));
+            input.focus();
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Guardar';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error al comunicarse con el servidor');
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = 'Guardar';
+    });
+}
 </script>
 
 <?php endif; ?>

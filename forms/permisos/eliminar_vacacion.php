@@ -39,17 +39,60 @@ if ($idVacacion <= 0) {
 try {
     $db = Database::getInstance()->getConnection();
     
-    // Verificar que la vacación existe
-    $stmt = $db->prepare("SELECT id_vacacion, cedula FROM solicitud_vacaciones WHERE id_vacacion = ?");
+    // Verificar que la vacación existe y obtener sus datos para sumar al acumulado
+    $stmt = $db->prepare("SELECT id_vacacion, cedula, dias_vacacion FROM solicitud_vacaciones WHERE id_vacacion = ?");
     $stmt->execute([$idVacacion]);
     $vacacion = $stmt->fetch();
     
     if (!$vacacion) {
         mostrarMensaje("Vacación no encontrada", 'error');
     } else {
-        // Eliminar vacación (no se acumula nada, solo se elimina el registro)
+        $diasASumar = (int)($vacacion['dias_vacacion'] ?? 0);
+        
+        // Eliminar vacación
         $stmt = $db->prepare("DELETE FROM solicitud_vacaciones WHERE id_vacacion = ?");
         $stmt->execute([$idVacacion]);
+        
+        // Sumar días de vuelta al acumulado si hay días a sumar (revertir la resta)
+        if ($diasASumar > 0) {
+            try {
+                // Verificar si la columna existe
+                $stmtCheckCol = $db->query("
+                    SELECT COUNT(*) as existe 
+                    FROM INFORMATION_SCHEMA.COLUMNS 
+                    WHERE TABLE_SCHEMA = DATABASE() 
+                    AND TABLE_NAME = 'funcionarios' 
+                    AND COLUMN_NAME = 'vacaciones_dias_acumulados'
+                ");
+                $columnaExiste = $stmtCheckCol->fetch()['existe'] > 0;
+                
+                if ($columnaExiste) {
+                    // Obtener valor actual
+                    $stmtAcum = $db->prepare("
+                        SELECT vacaciones_dias_acumulados
+                        FROM funcionarios 
+                        WHERE cedula = ?
+                    ");
+                    $stmtAcum->execute([$vacacion['cedula']]);
+                    $resultadoAcum = $stmtAcum->fetch();
+                    
+                    $diasActuales = (int)($resultadoAcum['vacaciones_dias_acumulados'] ?? 0);
+                    // SUMAR los días (al eliminar, se revierte la resta, por lo tanto se suma)
+                    $nuevosDias = $diasActuales + $diasASumar;
+                    
+                    // Actualizar acumulado
+                    $stmtUpdate = $db->prepare("
+                        UPDATE funcionarios 
+                        SET vacaciones_dias_acumulados = ? 
+                        WHERE cedula = ?
+                    ");
+                    $stmtUpdate->execute([$nuevosDias, $vacacion['cedula']]);
+                }
+            } catch (Exception $e) {
+                // Log del error pero no fallar la eliminación
+                error_log("Error al actualizar vacaciones_dias_acumulados al eliminar: " . $e->getMessage());
+            }
+        }
         
         mostrarMensaje("Vacación eliminada exitosamente", 'success');
     }

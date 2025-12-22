@@ -81,6 +81,7 @@ try {
     $periodos = $_POST['periodos'];
     $registrosGuardados = 0;
     $errores = [];
+    $totalDiasRestar = 0; // Sumar total de días para restar del acumulado
     
     // Procesar cada período (línea de la tabla)
     foreach ($periodos as $index => $periodoData) {
@@ -128,6 +129,7 @@ try {
                 $usuarioId
             ]);
             
+            $totalDiasRestar += $diasVacacion; // Acumular días para restar
             $registrosGuardados++;
             
         } catch (PDOException $e) {
@@ -137,6 +139,48 @@ try {
             } else {
                 $errores[] = "Línea " . ($index + 1) . ": Error al guardar - " . $e->getMessage();
             }
+        }
+    }
+    
+    // Restar días del acumulado si se guardaron registros
+    if ($registrosGuardados > 0 && $totalDiasRestar > 0) {
+        try {
+            // Verificar si la columna existe
+            $stmtCheckCol = $db->query("
+                SELECT COUNT(*) as existe 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND TABLE_NAME = 'funcionarios' 
+                AND COLUMN_NAME = 'vacaciones_dias_acumulados'
+            ");
+            $columnaExiste = $stmtCheckCol->fetch()['existe'] > 0;
+            
+            if ($columnaExiste) {
+                // Obtener valor actual
+                $stmtAcum = $db->prepare("
+                    SELECT vacaciones_dias_acumulados
+                    FROM funcionarios 
+                    WHERE cedula = ?
+                ");
+                $stmtAcum->execute([$cedulaParaGuardar]);
+                $resultadoAcum = $stmtAcum->fetch();
+                
+                $diasActuales = (int)($resultadoAcum['vacaciones_dias_acumulados'] ?? 0);
+                // RESTAR los días (lógica igual a tiempo compensatorio)
+                $nuevosDias = $diasActuales - $totalDiasRestar;
+                // Permitir valores negativos
+                
+                // Actualizar acumulado
+                $stmtUpdate = $db->prepare("
+                    UPDATE funcionarios 
+                    SET vacaciones_dias_acumulados = ? 
+                    WHERE cedula = ?
+                ");
+                $stmtUpdate->execute([$nuevosDias, $cedulaParaGuardar]);
+            }
+        } catch (Exception $e) {
+            // Log del error pero no fallar el guardado
+            error_log("Error al actualizar vacaciones_dias_acumulados al guardar: " . $e->getMessage());
         }
     }
     
