@@ -37,3 +37,4 @@ CREATE TABLE IF NOT EXISTS `solicitud_vacaciones` (
 
 -- Verificar que la tabla se creó correctamente
 DESCRIBE `solicitud_vacaciones`;
+

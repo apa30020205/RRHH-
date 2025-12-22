@@ -34,3 +34,4 @@ CREATE TABLE IF NOT EXISTS `reincorporacion` (
 
 -- Verificar que la tabla se creó correctamente
 DESCRIBE `reincorporacion`;
+

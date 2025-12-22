@@ -275,3 +275,4 @@ try {
     redirect(BASE_URL . '/forms/permisos/solicitud_permiso.php' . $cedulaParam);
 }
 
+

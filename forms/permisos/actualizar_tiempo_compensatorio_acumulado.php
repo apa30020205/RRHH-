@@ -75,10 +75,20 @@ try {
             exit();
         }
         
-        // Validar formato de tiempo (HH:MM:SS)
-        if (!preg_match('/^\d{2}:\d{2}:\d{2}$/', $horasAcumuladas)) {
+        // Validar formato de tiempo (H:MM:SS o HH:MM:SS o HHH:MM:SS hasta 838 horas, con o sin signo negativo)
+        // Permite desde 1 hasta 3 dígitos en las horas (hasta 838 que es el límite de MySQL TIME)
+        if (!preg_match('/^-?\d{1,3}:\d{2}:\d{2}$/', $horasAcumuladas)) {
             http_response_code(400);
-            echo json_encode(['success' => false, 'error' => 'Formato de tiempo inválido. Debe ser HH:MM:SS']);
+            echo json_encode(['success' => false, 'error' => 'Formato de tiempo inválido. Debe ser H:MM:SS o HH:MM:SS o HHH:MM:SS (hasta 838 horas)']);
+            exit();
+        }
+        
+        // Validar que las horas no excedan el límite de MySQL TIME (838 horas)
+        $partes = explode(':', $horasAcumuladas);
+        $horas = (int)abs((int)$partes[0]); // Tomar valor absoluto de las horas
+        if ($horas > 838) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'El valor de horas no puede exceder 838 horas (límite de MySQL TIME)']);
             exit();
         }
         
@@ -111,14 +121,8 @@ try {
         ]);
         
     } else {
-        // Actualizar días acumulados
+        // Actualizar días acumulados (permitir valores negativos)
         $diasAcumulados = isset($data['dias_acumulados']) ? (int)$data['dias_acumulados'] : 0;
-        
-        if ($diasAcumulados < 0) {
-            http_response_code(400);
-            echo json_encode(['success' => false, 'error' => 'Los días no pueden ser negativos']);
-            exit();
-        }
         
         // Verificar si la columna existe
         $stmtCheckCol = $db->query("
@@ -165,3 +169,4 @@ try {
     ]);
 }
 ?>
+

@@ -26,3 +26,4 @@ DEALLOCATE PREPARE stmt;
 -- Verificar que la columna se agregó correctamente
 DESCRIBE `funcionarios`;
 
+

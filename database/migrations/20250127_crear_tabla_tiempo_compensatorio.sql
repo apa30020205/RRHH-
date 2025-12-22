@@ -32,3 +32,4 @@ CREATE TABLE IF NOT EXISTS `tiempo_compensatorio` (
 
 -- Verificar que la tabla se creó correctamente
 DESCRIBE `tiempo_compensatorio`;
+

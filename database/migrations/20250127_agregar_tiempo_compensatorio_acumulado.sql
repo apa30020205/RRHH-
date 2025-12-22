@@ -43,3 +43,4 @@ DEALLOCATE PREPARE stmt_dias;
 
 -- Verificar que las columnas se agregaron correctamente
 DESCRIBE `funcionarios`;
+

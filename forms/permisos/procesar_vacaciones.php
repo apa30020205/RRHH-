@@ -161,3 +161,4 @@ try {
     $cedulaParam = isset($_POST['cedula']) ? '?cedula=' . urlencode($_POST['cedula']) : '';
     redirect(BASE_URL . '/forms/permisos/vacaciones.php' . $cedulaParam);
 }
+

@@ -93,11 +93,27 @@ if ($funcionario) {
         
         if (!empty($resultadoAcum['tiempo_compensatorio_horas_acumuladas'])) {
             $timeValue = $resultadoAcum['tiempo_compensatorio_horas_acumuladas'];
-            if (is_string($timeValue) && strpos($timeValue, ':') !== false) {
-                $tiempoCompHorasAcumuladasMostrar = substr($timeValue, 0, 5);
+            // MySQL TIME puede venir como string en formato 'HH:MM:SS' o '-HH:MM:SS' para negativos
+            if (is_string($timeValue)) {
+                // Detectar si es negativo (comienza con '-')
+                $esNegativo = (strpos($timeValue, '-') === 0);
+                $timeValueSinSigno = $esNegativo ? substr($timeValue, 1) : $timeValue;
+                
+                if (strpos($timeValueSinSigno, ':') !== false) {
+                    $prefijo = $esNegativo ? '-' : '';
+                    $tiempoCompHorasAcumuladasMostrar = $prefijo . substr($timeValueSinSigno, 0, 5);
+                } else {
+                    $horasTotales = (int)$timeValueSinSigno;
+                    if ($esNegativo) {
+                        $horasTotales = -$horasTotales;
+                    }
+                    $signo = $horasTotales < 0 ? '-' : '';
+                    $tiempoCompHorasAcumuladasMostrar = $signo . sprintf('%02d:00', abs($horasTotales));
+                }
             } else {
                 $horasTotales = (int)$timeValue;
-                $tiempoCompHorasAcumuladasMostrar = sprintf('%02d:00', $horasTotales);
+                $signo = $horasTotales < 0 ? '-' : '';
+                $tiempoCompHorasAcumuladasMostrar = $signo . sprintf('%02d:00', abs($horasTotales));
             }
         }
         
@@ -550,32 +566,53 @@ function guardarHorasAcumuladas() {
     
     let horasValue = input.value.trim();
     
-    // Si es solo un número, convertirlo a formato HH:MM
-    const regexSoloNumero = /^([0-9]+)$/;
+    // Detectar si es negativo
+    const esNegativo = horasValue.startsWith('-');
+    const valorSinSigno = esNegativo ? horasValue.substring(1) : horasValue;
+    
+    // Si es solo un número, convertirlo a formato H:MM, HH:MM o HHH:MM (según el número de dígitos)
+    const regexSoloNumero = /^(-?[0-9]+)$/;
     if (regexSoloNumero.test(horasValue)) {
         const horas = parseInt(horasValue);
-        if (horas > 838) {
+        const horasAbs = Math.abs(horas);
+        if (horasAbs > 838) {
             alert('El valor de horas no puede exceder 838 horas (límite de MySQL TIME)');
             input.focus();
             btnGuardar.disabled = false;
             btnGuardar.textContent = 'Guardar';
             return;
         }
-        horasValue = String(horas).padStart(2, '0') + ':00';
+        const signo = horas < 0 ? '-' : '';
+        // No usar padStart para mantener el número de dígitos original (permite 1, 2 o 3 dígitos)
+        horasValue = signo + String(horasAbs) + ':00';
     }
     
-    const regexHoras = /^([0-9]{1,3}):([0-5][0-9])$/;
+    // Validar formato H:MM, HH:MM o HHH:MM (permitir negativos y hasta 838 horas)
+    const regexHoras = /^(-?[0-9]{1,3}):([0-5][0-9])$/;
     
     if (!regexHoras.test(horasValue)) {
-        alert('Por favor ingrese un formato válido (HH:MM o solo número de horas). Ejemplo: 33:30 o 5');
+        alert('Por favor ingrese un formato válido (H:MM, HH:MM, HHH:MM o solo número de horas). Ejemplo: 100:00, 33:30, -5:00 o 100');
         input.focus();
         btnGuardar.disabled = false;
         btnGuardar.textContent = 'Guardar';
         return;
     }
     
-    // Agregar segundos si no los tiene
-    if (horasValue.length === 5) {
+    // Verificar límite absoluto
+    const partes = horasValue.split(':');
+    const horasParte = parseInt(partes[0]);
+    const horasAbs = Math.abs(horasParte);
+    if (horasAbs > 838) {
+        alert('El valor de horas no puede exceder 838 horas (límite de MySQL TIME)');
+        input.focus();
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = 'Guardar';
+        return;
+    }
+    
+    // Agregar segundos si no los tiene (verificar si tiene formato HH:MM o HHH:MM sin segundos)
+    // Si solo tiene 2 partes (horas y minutos), agregar segundos
+    if (partes.length === 2) {
         horasValue += ':00';
     }
     
@@ -596,9 +633,15 @@ function guardarHorasAcumuladas() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            display.textContent = horasValue.substring(0, 5);
-            document.getElementById('horas-acumuladas-original').value = horasValue.substring(0, 5);
-            input.value = horasValue.substring(0, 5);
+            // Extraer HH:MM o HHH:MM (o -HH:MM/-HHH:MM si es negativo) para mostrar (eliminar los segundos)
+            // Si tiene formato HH:MM:SS o HHH:MM:SS, tomar solo hasta el último ":"
+            const partesCompletas = horasValue.split(':');
+            const horasParaMostrar = partesCompletas.length === 3 
+                ? partesCompletas[0] + ':' + partesCompletas[1] 
+                : horasValue; // Si ya está en formato HH:MM, usarlo tal cual
+            display.textContent = horasParaMostrar;
+            document.getElementById('horas-acumuladas-original').value = horasParaMostrar;
+            input.value = horasParaMostrar;
             display.style.display = 'inline';
             input.style.display = 'none';
             btnGuardar.style.display = 'none';
@@ -656,15 +699,8 @@ function guardarDiasAcumulados() {
     const cedula = document.getElementById('cedula-funcionario').value;
     const mensaje = document.getElementById('mensaje-dias');
     
+    // Permitir valores negativos
     const diasValue = parseInt(input.value) || 0;
-    
-    if (diasValue < 0) {
-        alert('Los días no pueden ser negativos');
-        input.focus();
-        btnGuardar.disabled = false;
-        btnGuardar.textContent = 'Guardar';
-        return;
-    }
     
     btnGuardar.disabled = true;
     btnGuardar.textContent = 'Guardando...';
@@ -710,3 +746,4 @@ function guardarDiasAcumulados() {
 <?php endif; ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
+

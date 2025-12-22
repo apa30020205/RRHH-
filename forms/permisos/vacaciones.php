@@ -564,3 +564,4 @@ document.getElementById('formVacaciones').addEventListener('submit', function(e)
 <?php endif; ?>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
+

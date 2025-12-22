@@ -19,3 +19,4 @@ MODIFY COLUMN `motivo` enum(
 
 -- Verificar el cambio
 DESCRIBE `permisos`;
+

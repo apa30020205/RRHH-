@@ -198,3 +198,4 @@ try {
 // Redirigir de vuelta al formulario con la cédula
 $cedulaParam = isset($_POST['cedula']) ? '?cedula=' . urlencode($_POST['cedula']) : '';
 redirect(BASE_URL . '/forms/permisos/mision_oficial.php' . $cedulaParam);
+

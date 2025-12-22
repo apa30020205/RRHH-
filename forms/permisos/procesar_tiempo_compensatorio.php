@@ -61,9 +61,9 @@ try {
     $dias = (int)$_POST['dias'];
     $fechaUso = trim($_POST['fecha_uso']);
     
-    // Validar que al menos horas o días sean mayor a 0
-    if ($horas <= 0 && $dias <= 0) {
-        throw new Exception("Debe ingresar al menos horas o días mayor a 0");
+    // Validar que al menos horas o días sean diferentes de 0 (pueden ser negativos)
+    if ($horas == 0 && $dias == 0) {
+        throw new Exception("Debe ingresar al menos horas o días (pueden ser negativos)");
     }
     
     // Validar formato de fecha
@@ -72,13 +72,13 @@ try {
         throw new Exception("Fecha inválida");
     }
     
-    // Validar rangos
-    if ($horas < 0 || $horas > 23) {
-        throw new Exception("Las horas deben estar entre 0 y 23");
+    // Validar rangos (permitir valores negativos y positivos)
+    if ($horas > 23 || $horas < -23) {
+        throw new Exception("Las horas deben estar entre -23 y 23");
     }
     
-    if ($dias < 0 || $dias > 99) {
-        throw new Exception("Los días deben estar entre 0 y 99");
+    if ($dias > 99 || $dias < -99) {
+        throw new Exception("Los días deben estar entre -99 y 99");
     }
     
     try {
@@ -108,26 +108,53 @@ try {
             $stmtAcum->execute([$cedulaParaGuardar]);
             $resultadoAcum = $stmtAcum->fetch();
             
-            // Calcular nuevas horas acumuladas
+            // Calcular nuevas horas acumuladas (RESTAR porque es tiempo compensatorio usado)
             $horasActuales = 0;
             if (!empty($resultadoAcum['tiempo_compensatorio_horas_acumuladas'])) {
                 $timeValue = $resultadoAcum['tiempo_compensatorio_horas_acumuladas'];
-                if (is_string($timeValue) && strpos($timeValue, ':') !== false) {
-                    $partes = explode(':', $timeValue);
-                    $horasActuales = (int)($partes[0] ?? 0);
+                // MySQL TIME puede venir como string en formato 'HH:MM:SS' o '-HH:MM:SS' para negativos
+                if (is_string($timeValue)) {
+                    // Detectar si es negativo (comienza con '-')
+                    $esNegativo = (strpos($timeValue, '-') === 0);
+                    $timeValueSinSigno = $esNegativo ? substr($timeValue, 1) : $timeValue;
+                    
+                    if (strpos($timeValueSinSigno, ':') !== false) {
+                        $partes = explode(':', $timeValueSinSigno);
+                        $horasActuales = (int)($partes[0] ?? 0);
+                        if ($esNegativo) {
+                            $horasActuales = -$horasActuales;
+                        }
+                    } else {
+                        $horasActuales = $esNegativo ? -(int)$timeValueSinSigno : (int)$timeValueSinSigno;
+                    }
+                } elseif (is_object($timeValue) && method_exists($timeValue, 'format')) {
+                    // Si viene como objeto DateTime/Time
+                    $horas = (int)$timeValue->format('H');
+                    // Determinar si es negativo (puede venir como intervalo negativo)
+                    $horasActuales = $horas;
                 }
             }
             
-            $nuevasHoras = $horasActuales + $horas;
-            // Limitar a 838 horas (límite de MySQL TIME)
+            // RESTAR las horas (tiempo compensatorio se usa, por lo tanto se resta del acumulado)
+            $nuevasHoras = $horasActuales - $horas;
+            // Permitir valores negativos, pero limitar el rango absoluto para TIME
+            // MySQL TIME puede manejar desde -838:59:59 hasta 838:59:59
             if ($nuevasHoras > 838) {
                 $nuevasHoras = 838;
+            } elseif ($nuevasHoras < -838) {
+                $nuevasHoras = -838;
             }
-            $nuevasHorasTime = sprintf('%02d:00:00', $nuevasHoras);
+            // Formatear para TIME: MySQL TIME puede almacenar negativos con formato '-HH:MM:SS'
+            if ($nuevasHoras < 0) {
+                $nuevasHorasTime = sprintf('-%02d:00:00', abs($nuevasHoras));
+            } else {
+                $nuevasHorasTime = sprintf('%02d:00:00', $nuevasHoras);
+            }
             
-            // Calcular nuevos días acumulados
+            // Calcular nuevos días acumulados (RESTAR porque es tiempo compensatorio usado)
             $diasActuales = (int)($resultadoAcum['tiempo_compensatorio_dias_acumulados'] ?? 0);
-            $nuevosDias = $diasActuales + $dias;
+            // RESTAR los días (tiempo compensatorio se usa, por lo tanto se resta del acumulado)
+            $nuevosDias = $diasActuales - $dias;
             
             // Actualizar acumulados en funcionarios
             $stmtUpdate = $db->prepare("
@@ -160,3 +187,4 @@ try {
 // Redirigir de vuelta al formulario con la cédula
 $cedulaParam = isset($_POST['cedula']) ? '?cedula=' . urlencode($_POST['cedula']) : '';
 redirect(BASE_URL . '/forms/permisos/tiempo_compensatorio.php' . $cedulaParam);
+

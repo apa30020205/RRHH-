@@ -70,18 +70,47 @@ try {
                 $horasActuales = 0;
                 if (!empty($resultado['tiempo_compensatorio_horas_acumuladas'])) {
                     $timeValue = $resultado['tiempo_compensatorio_horas_acumuladas'];
-                    if (is_string($timeValue) && strpos($timeValue, ':') !== false) {
-                        $partes = explode(':', $timeValue);
-                        $horasActuales = (int)($partes[0] ?? 0);
+                    // MySQL TIME puede venir como string en formato 'HH:MM:SS' o '-HH:MM:SS' para negativos
+                    if (is_string($timeValue)) {
+                        // Detectar si es negativo (comienza con '-')
+                        $esNegativo = (strpos($timeValue, '-') === 0);
+                        $timeValueSinSigno = $esNegativo ? substr($timeValue, 1) : $timeValue;
+                        
+                        if (strpos($timeValueSinSigno, ':') !== false) {
+                            $partes = explode(':', $timeValueSinSigno);
+                            $horasActuales = (int)($partes[0] ?? 0);
+                            if ($esNegativo) {
+                                $horasActuales = -$horasActuales;
+                            }
+                        } else {
+                            $horasActuales = $esNegativo ? -(int)$timeValueSinSigno : (int)$timeValueSinSigno;
+                        }
+                    } elseif (is_object($timeValue) && method_exists($timeValue, 'format')) {
+                        // Si viene como objeto DateTime/Time
+                        $horas = (int)$timeValue->format('H');
+                        $horasActuales = $horas;
                     }
                 }
                 
-                $nuevasHoras = max(0, $horasActuales - $horasARestar);
-                $nuevasHorasTime = sprintf('%02d:00:00', $nuevasHoras);
+                // SUMAR las horas (al eliminar, se revierte la resta, por lo tanto se suma)
+                $nuevasHoras = $horasActuales + $horasARestar;
+                // Permitir valores negativos
+                if ($nuevasHoras > 838) {
+                    $nuevasHoras = 838;
+                } elseif ($nuevasHoras < -838) {
+                    $nuevasHoras = -838;
+                }
+                // Formatear para TIME: MySQL TIME puede almacenar negativos con formato '-HH:MM:SS'
+                if ($nuevasHoras < 0) {
+                    $nuevasHorasTime = sprintf('-%02d:00:00', abs($nuevasHoras));
+                } else {
+                    $nuevasHorasTime = sprintf('%02d:00:00', $nuevasHoras);
+                }
                 
-                // Calcular nuevos días acumulados
+                // Calcular nuevos días acumulados (SUMAR al eliminar, revierte la resta)
                 $diasActuales = (int)($resultado['tiempo_compensatorio_dias_acumulados'] ?? 0);
-                $nuevosDias = max(0, $diasActuales - $diasARestar);
+                // SUMAR los días (al eliminar, se revierte la resta, por lo tanto se suma)
+                $nuevosDias = $diasActuales + $diasARestar;
                 
                 // Actualizar acumulados en funcionarios
                 $stmtUpdate = $db->prepare("
@@ -127,3 +156,4 @@ if (!empty($params)) {
 
 redirect($redirectUrl);
 ?>
+
